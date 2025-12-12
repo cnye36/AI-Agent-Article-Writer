@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@ai-sdk/openai':
+        specifier: ^2.0.86
+        version: 2.0.86(zod@4.1.13)
       '@langchain/community':
         specifier: ^0.3.0
         version: 0.3.58(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.57.0)(deepmerge@4.3.1)(dotenv@17.2.3)(openai@6.10.0(ws@8.18.3)(zod@4.1.13))(zod@4.1.13))(@ibm-cloud/watsonx-ai@1.7.5)(@langchain/anthropic@0.3.33(@langchain/core@0.3.79(@opentelemetry/api@1.9.0)(openai@6.10.0(ws@8.18.3)(zod@4.1.13)))(zod@4.1.13))(@langchain/core@0.3.79(@opentelemetry/api@1.9.0)(openai@6.10.0(ws@8.18.3)(zod@4.1.13)))(@opentelemetry/api@1.9.0)(@supabase/supabase-js@2.87.0)(axios@1.13.2)(fast-xml-parser@4.5.3)(ibm-cloud-sdk-core@5.4.5)(ignore@5.3.2)(jsonwebtoken@9.0.3)(openai@6.10.0(ws@8.18.3)(zod@4.1.13))(playwright@1.57.0)(weaviate-client@3.10.0)(ws@8.18.3)
@@ -102,6 +105,12 @@ importers:
 
 packages:
 
+  '@ai-sdk/openai@2.0.86':
+    resolution: {integrity: sha512-obsLIOyA93lbQiSt1rvBItoVQp1U2RDPs0bNG0JYhm6Gku8Dg/0Cm8e4NUWT5p5PN10/doKSb3SMSKCixwIAKA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider-utils@1.0.22':
     resolution: {integrity: sha512-YHK2rpj++wnLVc9vPGzGFP3Pjeld2MwhKinetA0zKXOoHAT/Jit5O8kZsxcSlJPu9wvcGT1UGZEjZrtO7PfFOQ==}
     engines: {node: '>=18'}
@@ -111,8 +120,18 @@ packages:
       zod:
         optional: true
 
+  '@ai-sdk/provider-utils@3.0.19':
+    resolution: {integrity: sha512-W41Wc9/jbUVXVwCN/7bWa4IKe8MtxO3EyA0Hfhx6grnmiYlCvpI8neSYWFE0zScXJkgA/YK3BRybzgyiXuu6JA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@0.0.26':
     resolution: {integrity: sha512-dQkfBDs2lTYpKM8389oopPdQgIU007GQyCbuPPrV+K6MtSII3HBfE0stUIMXUb44L+LK1t6GXPP7wjSzjO6uKg==}
+    engines: {node: '>=18'}
+
+  '@ai-sdk/provider@2.0.0':
+    resolution: {integrity: sha512-6o7Y2SeO9vFKB8lArHXehNuusnpddKPk7xqL7T2/b+OvXMRIXUO1rR4wcv1hAFUAT9avGZshty3Wlua/XA7TvA==}
     engines: {node: '>=18'}
 
   '@ai-sdk/react@0.0.70':
@@ -1090,6 +1109,9 @@ packages:
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
+
+  '@standard-schema/spec@1.0.0':
+    resolution: {integrity: sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA==}
 
   '@supabase/auth-js@2.87.0':
     resolution: {integrity: sha512-Otv/fjkyev9cH55VoZHwbzDd5N8y1SNREqDpzE8cqI2KnlHAkr0g6ZWv7d8elVKhS3le09xvAeRaoONGaRc8sA==}
@@ -4278,6 +4300,12 @@ packages:
 
 snapshots:
 
+  '@ai-sdk/openai@2.0.86(zod@4.1.13)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.19(zod@4.1.13)
+      zod: 4.1.13
+
   '@ai-sdk/provider-utils@1.0.22(zod@4.1.13)':
     dependencies:
       '@ai-sdk/provider': 0.0.26
@@ -4287,7 +4315,18 @@ snapshots:
     optionalDependencies:
       zod: 4.1.13
 
+  '@ai-sdk/provider-utils@3.0.19(zod@4.1.13)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@standard-schema/spec': 1.0.0
+      eventsource-parser: 3.0.6
+      zod: 4.1.13
+
   '@ai-sdk/provider@0.0.26':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@2.0.0':
     dependencies:
       json-schema: 0.4.0
 
@@ -5022,6 +5061,8 @@ snapshots:
   '@sec-ant/readable-stream@0.4.1': {}
 
   '@sindresorhus/merge-streams@4.0.0': {}
+
+  '@standard-schema/spec@1.0.0': {}
 
   '@supabase/auth-js@2.87.0':
     dependencies:

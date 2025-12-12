@@ -6,7 +6,14 @@ import { z } from "zod";
 // Request validation schema
 const EditRequestSchema = z.object({
   selectedText: z.string().min(1),
-  action: z.enum(["rewrite", "expand", "simplify", "custom", "fix_grammar", "change_tone"]),
+  action: z.enum([
+    "rewrite",
+    "expand",
+    "simplify",
+    "custom",
+    "fix_grammar",
+    "change_tone",
+  ]),
   customPrompt: z.string().optional(),
   context: z
     .object({
@@ -104,23 +111,60 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate request body
     const body = await request.json();
-    const validationResult = EditRequestSchema.safeParse(body);
 
-    if (!validationResult.success) {
-      return new Response(
-        JSON.stringify({
-          error: "Invalid request",
-          details: validationResult.error.flatten(),
-        }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
+    // Handle useCompletion format (from Vercel AI SDK)
+    // It sends: { prompt: "action: text" }
+    let selectedText: string;
+    let action: string;
+    let customPrompt: string | undefined;
+    let context: typeof body.context | undefined;
+    let targetTone: string | undefined;
+
+    if (body.prompt && !body.selectedText) {
+      // Parse useCompletion format: "action: text"
+      console.log("[AI Edit] Using Vercel AI SDK compatibility mode");
+      const promptText = body.prompt as string;
+
+      // Try to extract action from prompt
+      const actionMatch = promptText.match(
+        /^(rewrite|expand|simplify|fix_grammar|change_tone|custom):\s*/i
       );
-    }
+      if (actionMatch) {
+        action = actionMatch[1].toLowerCase();
+        selectedText = promptText.slice(actionMatch[0].length);
+      } else {
+        // Default to simplify if no action specified
+        action = "simplify";
+        selectedText = promptText;
+      }
+      console.log(
+        `[AI Edit] Parsed action: ${action}, text length: ${selectedText.length}`
+      );
+    } else {
+      // Use standard format
+      const validationResult = EditRequestSchema.safeParse(body);
 
-    const { selectedText, action, customPrompt, context, targetTone } =
-      validationResult.data;
+      if (!validationResult.success) {
+        console.error(
+          "[AI Edit] Validation failed:",
+          validationResult.error.flatten()
+        );
+        console.error("[AI Edit] Request body:", JSON.stringify(body, null, 2));
+        return new Response(
+          JSON.stringify({
+            error: "Invalid request",
+            details: validationResult.error.flatten(),
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      ({ selectedText, action, customPrompt, context, targetTone } =
+        validationResult.data);
+    }
 
     // Build the system prompt
     let systemPrompt = ACTION_PROMPTS[action] || ACTION_PROMPTS.custom;
@@ -158,16 +202,14 @@ Ensure your edit flows naturally with this context.`;
       userPrompt = `Change the tone to: ${targetTone}\n\nText to edit:\n\n${selectedText}`;
     }
 
-    // Stream the response
+    // Stream response using OpenAI directly
     const encoder = new TextEncoder();
-
     const stream = new ReadableStream({
       async start(controller) {
         try {
           const response = await openai.chat.completions.create({
-            model: process.env.OPENAI_MODEL || "gpt-5.2",
+            model: process.env.OPENAI_MODEL || "gpt-4o",
             stream: true,
-            reasoning_effort: "medium",
             messages: [
               {
                 role: "system",
@@ -189,7 +231,11 @@ Ensure your edit flows naturally with this context.`;
 
           controller.close();
         } catch (error) {
-          console.error("OpenAI API error:", error);
+          console.error("[AI Edit] OpenAI API error:", error);
+          if (error instanceof Error) {
+            console.error("[AI Edit] Error message:", error.message);
+            console.error("[AI Edit] Error stack:", error.stack);
+          }
           controller.error(error);
         }
       },

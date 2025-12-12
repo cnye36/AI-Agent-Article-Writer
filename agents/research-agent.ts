@@ -59,7 +59,7 @@ For each topic, provide a JSON array with this structure:
 export function createResearchAgent() {
   // Use OpenAI for analysis with GPT-5.1 (or fallback to gpt-4o)
   const analysisModel = new ChatOpenAI({
-    model: process.env.OPENAI_MODEL || "gpt-5.1",
+    model: process.env.OPENAI_MODEL || "gpt-5.2",
     temperature: 0.3,
   });
 
@@ -67,13 +67,16 @@ export function createResearchAgent() {
     .addNode("search", async (state) => {
       // Use OpenAI to search and gather information
       const queries = generateSearchQueries(state.industry, state.keywords);
-      
+
       // Use GPT-5.1 with search capabilities (or fallback to o1/o3 which have web access)
-      const searchModel = process.env.OPENAI_SEARCH_MODEL || "gpt-5.1";
-      
-      const industryContext = state.industry ? ` in the ${state.industry} industry` : '';
-      const searchPrompts = queries.map(query => 
-        `Research recent news and trends about: "${query}"${industryContext}.
+      const searchModel = process.env.OPENAI_SEARCH_MODEL || "gpt-5.2";
+
+      const industryContext = state.industry
+        ? ` in the ${state.industry} industry`
+        : "";
+      const searchPrompts = queries.map(
+        (query) =>
+          `Research recent news and trends about: "${query}"${industryContext}.
         
         Provide a comprehensive summary of:
         1. Recent developments and news
@@ -147,11 +150,14 @@ export function createResearchAgent() {
         },
       ]);
 
-      const content = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+      const content =
+        typeof response.content === "string"
+          ? response.content
+          : JSON.stringify(response.content);
       const topics = parseTopics(content);
 
       // Attach sources to topics
-      const topicsWithSources = topics.map(topic => ({
+      const topicsWithSources = topics.map((topic) => ({
         ...topic,
         sources: matchSourcesToTopic(topic, state.sources),
       }));
@@ -165,7 +171,10 @@ export function createResearchAgent() {
             const embedding = await generateEmbedding(textToEmbed);
             return { ...topic, embedding };
           } catch (error) {
-            console.error(`Error generating embedding for topic "${topic.title}":`, error);
+            console.error(
+              `Error generating embedding for topic "${topic.title}":`,
+              error
+            );
             // Return topic without embedding - it can still be saved
             return topic;
           }

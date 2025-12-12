@@ -95,7 +95,7 @@ const outlineAgentPrompt = `You are an expert content strategist and outline arc
 
 export function createOutlineAgent() {
   const model = new ChatOpenAI({
-    model: process.env.OPENAI_MODEL || "gpt-5.1",
+    model: process.env.OPENAI_MODEL || "gpt-5.2",
     temperature: 0.4,
   });
 
@@ -108,9 +108,8 @@ export function createOutlineAgent() {
 
       const searchQueries = generateSearchQueriesForOutline(state.topic);
       const searchModel =
-        process.env.OPENAI_SEARCH_MODEL ||
         process.env.OPENAI_MODEL ||
-        "gpt-5.1";
+        "gpt-5.2";
 
       const hasWebAccess =
         searchModel.includes("o1") ||
@@ -177,7 +176,7 @@ Include source URLs with publication dates.`;
             const startTime = Date.now();
 
             // Add timeout to prevent slow queries from blocking
-            const SEARCH_TIMEOUT = 12000; // 12 seconds per query
+            const SEARCH_TIMEOUT = 15000; // 15 seconds per query
             const searchPromise = openai.chat.completions.create({
               model: searchModel,
               messages: [
@@ -206,7 +205,6 @@ Always include source URLs, titles, summaries, and dates when providing informat
                 { role: "user", content: prompt },
               ],
               reasoning_effort: "medium",
-              
             });
 
             const timeoutPromise = new Promise<Awaited<typeof searchPromise>>(

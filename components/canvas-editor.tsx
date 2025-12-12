@@ -6,8 +6,8 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useCompletion } from "ai/react";
 import { markdownToTiptap, tiptapToMarkdown } from "@/lib/markdown";
+import { LoadingMark } from "@/lib/tiptap-extensions/loading-mark";
 import "@/app/editor-styles.css";
 
 interface CanvasEditorProps {
@@ -18,7 +18,13 @@ interface CanvasEditorProps {
   onPublish?: () => Promise<void>;
 }
 
-export function CanvasEditor({ initialContent, articleId, articleType, onSave, onPublish }: CanvasEditorProps) {
+export function CanvasEditor({
+  initialContent,
+  articleId,
+  articleType,
+  onSave,
+  onPublish,
+}: CanvasEditorProps) {
   const [selectedText, setSelectedText] = useState("");
   const [aiPanelOpen, setAiPanelOpen] = useState(true); // Visible by default on desktop
   const [aiAction, setAiAction] = useState<
@@ -26,10 +32,15 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
   >("rewrite");
   const [linkUrl, setLinkUrl] = useState("");
   const [showLinkInput, setShowLinkInput] = useState(false);
+  const [editingRange, setEditingRange] = useState<{
+    from: number;
+    to: number;
+    originalText: string;
+  } | null>(null);
 
-  const { complete, completion, isLoading } = useCompletion({
-    api: "/api/ai/edit",
-  });
+  const [completion, setCompletion] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Refs for debounced save
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -64,11 +75,14 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
     }, 3000); // 3 second debounce - only save after user stops typing for 3 seconds
   }, []);
 
-  // Cleanup timeout on unmount
+  // Cleanup timeout and abort controller on unmount
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
     };
   }, []);
@@ -83,6 +97,7 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
         },
       }),
       Placeholder.configure({ placeholder: "Start writing..." }),
+      LoadingMark, // Custom mark for AI loading state
     ],
     content: markdownToTiptap(initialContent),
     immediatelyRender: false, // Fix SSR hydration issue
@@ -137,23 +152,201 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
 
   const handleAiEdit = useCallback(
     async (action: string, customPrompt?: string) => {
-      if (!selectedText || !editor) return;
+      if (!selectedText || !editor) {
+        console.log("[Canvas Editor] No text selected or no editor");
+        return;
+      }
 
-      const prompt = customPrompt || getPromptForAction(action, selectedText);
-      const result = await complete(prompt);
+      console.log(`[Canvas Editor] Starting AI edit: ${action}`);
+      console.log(
+        `[Canvas Editor] Selected text: "${selectedText.substring(0, 50)}..."`
+      );
 
-      if (result) {
-        const { from, to } = editor.state.selection;
-        editor
-          .chain()
-          .focus()
-          .deleteRange({ from, to })
-          .insertContent(result)
-          .run();
+      // Store the current selection range and original text
+      const { from, to } = editor.state.selection;
+      const originalText = selectedText;
+
+      // Clear previous completion
+      setCompletion("");
+
+      // Keep the original text visible and apply loading mark to make it pulse
+      editor
+        .chain()
+        .focus()
+        .setTextSelection({ from, to })
+        .setMark("loading") // Apply our custom loading mark to the selected text
+        .setTextSelection(to) // Move cursor to end to deselect
+        .run();
+
+      // Store the range with the original text
+      setEditingRange({
+        from,
+        to,
+        originalText,
+      });
+
+      // Build prompt - our API will parse the action from the prompt
+      const text = originalText;
+      const prompt = customPrompt || `${action}: ${text}`;
+
+      console.log(
+        `[Canvas Editor] Sending prompt: "${prompt.substring(0, 100)}..."`
+      );
+
+      // Start streaming completion from OpenAI
+      try {
+        console.log("[Canvas Editor] Starting stream with prompt:", {
+          promptLength: prompt.length,
+          promptPreview: prompt.substring(0, 150),
+        });
+
+        // Cancel any existing request
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+
+        // Create new abort controller for this request
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
+
+        setIsLoading(true);
+        setCompletion("");
+
+        const response = await fetch("/api/ai/edit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ prompt }),
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        if (!response.body) {
+          throw new Error("No response body");
+        }
+
+        // Stream the response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulatedText = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          accumulatedText += chunk;
+          setCompletion(accumulatedText);
+        }
+
+        console.log("[Canvas Editor] Stream completed:", {
+          completionLength: accumulatedText.length,
+        });
+        setIsLoading(false);
+      } catch (error) {
+        console.error("[Canvas Editor] Error during completion:", error);
+        setIsLoading(false);
+
+        // Remove loading mark and restore original text on error
+        if (
+          editor &&
+          !(error instanceof Error && error.name === "AbortError")
+        ) {
+          editor
+            .chain()
+            .focus()
+            .setTextSelection({ from, to })
+            .unsetMark("loading")
+            .setTextSelection(to)
+            .run();
+          setEditingRange(null);
+        }
       }
     },
-    [selectedText, editor, complete]
+    [selectedText, editor]
   );
+
+  // Log completion changes for debugging
+  useEffect(() => {
+    if (completion) {
+      console.log("[Canvas Editor] Completion updated:", {
+        length: completion.length,
+        preview: completion.substring(0, 100),
+        isLoading,
+        hasEditingRange: !!editingRange,
+      });
+    }
+  }, [completion, isLoading, editingRange]);
+
+  // Update editor with AI completion when done
+  useEffect(() => {
+    if (!editor || !editingRange) return;
+
+    // Only replace when loading is complete AND we have completion text
+    if (isLoading) {
+      console.log("[Canvas Editor] Still loading, waiting for completion...");
+      return;
+    }
+
+    if (!completion || completion.trim().length === 0) {
+      console.log("[Canvas Editor] No completion text yet, waiting...");
+      return;
+    }
+
+    console.log("[Canvas Editor] Replacing original text with AI completion", {
+      completionLength: completion.length,
+      editingRange,
+    });
+
+    const { from, to } = editingRange;
+
+    // Verify the range is still valid
+    const doc = editor.state.doc;
+    const docSize = doc.content.size;
+
+    // Ensure the range is still valid
+    const safeFrom = Math.min(from, docSize);
+    const safeTo = Math.min(to, docSize);
+
+    if (safeFrom < safeTo) {
+      // Remove the loading mark and replace the original text with completion
+      editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: safeFrom, to: safeTo })
+        .unsetMark("loading") // Remove loading mark first
+        .deleteRange({ from: safeFrom, to: safeTo })
+        .insertContentAt(safeFrom, completion.trim())
+        .setTextSelection(safeFrom + completion.trim().length) // Move cursor to end of new content
+        .run();
+
+      console.log(
+        "[Canvas Editor] Successfully replaced text with AI completion",
+        {
+          replacedLength: safeTo - safeFrom,
+          newLength: completion.trim().length,
+        }
+      );
+    } else {
+      console.warn(
+        "[Canvas Editor] Invalid range, appending completion at position:",
+        safeFrom
+      );
+      // If range is invalid, just insert at the from position
+      editor.chain().focus().insertContentAt(safeFrom, completion.trim()).run();
+    }
+
+    // Clear the editing range after successful replacement (async to avoid cascading renders)
+    setTimeout(() => {
+      setEditingRange(null);
+      setCompletion(""); // Clear completion for next edit
+    }, 0);
+  }, [completion, isLoading, editingRange, editor]);
 
   const handleBold = useCallback(() => {
     if (!editor) return;
@@ -384,23 +577,49 @@ interface AIAssistantPanelProps {
   onClose: () => void;
 }
 
-function AIAssistantPanel({ selectedText, onApply, isLoading, completion, onClose }: AIAssistantPanelProps) {
+function AIAssistantPanel({
+  selectedText,
+  onApply,
+  isLoading,
+  completion,
+  onClose,
+}: AIAssistantPanelProps) {
   const [customPrompt, setCustomPrompt] = useState("");
 
   const suggestions = [
-    { label: "Make more engaging", prompt: "Rewrite to be more engaging and captivating" },
-    { label: "Add statistics", prompt: "Expand with relevant statistics and data" },
+    {
+      label: "Make more engaging",
+      prompt: "Rewrite to be more engaging and captivating",
+    },
+    {
+      label: "Add statistics",
+      prompt: "Expand with relevant statistics and data",
+    },
     { label: "Fix grammar", prompt: "Fix any grammar or spelling issues" },
-    { label: "Change tone to casual", prompt: "Rewrite in a casual, conversational tone" },
-    { label: "Make more technical", prompt: "Add more technical depth and precision" },
-    { label: "Shorten", prompt: "Make this more concise while keeping key points" },
+    {
+      label: "Change tone to casual",
+      prompt: "Rewrite in a casual, conversational tone",
+    },
+    {
+      label: "Make more technical",
+      prompt: "Add more technical depth and precision",
+    },
+    {
+      label: "Shorten",
+      prompt: "Make this more concise while keeping key points",
+    },
   ];
 
   return (
     <div className="h-full flex flex-col">
       <div className="p-3 sm:p-4 border-b border-zinc-800 flex justify-between items-center">
         <h3 className="font-semibold text-sm sm:text-base">AI Assistant</h3>
-        <button onClick={onClose} className="text-zinc-400 hover:text-white text-lg sm:text-xl">✕</button>
+        <button
+          onClick={onClose}
+          className="text-zinc-400 hover:text-white text-lg sm:text-xl"
+        >
+          ✕
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
@@ -408,7 +627,9 @@ function AIAssistantPanel({ selectedText, onApply, isLoading, completion, onClos
         {selectedText && (
           <div className="bg-zinc-900 rounded-lg p-2 sm:p-3">
             <p className="text-xs text-zinc-500 mb-2">Selected text:</p>
-            <p className="text-xs sm:text-sm text-zinc-300 line-clamp-4">{selectedText}</p>
+            <p className="text-xs sm:text-sm text-zinc-300 line-clamp-4">
+              {selectedText}
+            </p>
           </div>
         )}
 
@@ -457,13 +678,4 @@ function AIAssistantPanel({ selectedText, onApply, isLoading, completion, onClos
       </div>
     </div>
   );
-}
-
-function getPromptForAction(action: string, text: string): string {
-  const prompts: Record<string, string> = {
-    rewrite: `Rewrite this text to improve clarity and engagement while maintaining the same meaning:\n\n${text}`,
-    expand: `Expand this text with more detail, examples, or supporting information:\n\n${text}`,
-    simplify: `Simplify this text to be more accessible and easier to understand:\n\n${text}`,
-  };
-  return prompts[action] || text;
 }

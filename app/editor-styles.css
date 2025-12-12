@@ -176,3 +176,42 @@
   margin-top: 0.75rem;
 }
 
+
+/* AI Loading Animation */
+.ai-loading {
+  display: inline-block;
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.3), rgba(59, 130, 246, 0.1));
+  background-size: 200% 100%;
+  animation: pulse-gradient 1.5s ease-in-out infinite;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #60a5fa;
+  font-weight: 500;
+}
+
+/* AI Loading Skeleton - for text replacement */
+.ai-loading-skeleton,
+span[data-loading="true"] {
+  display: inline;
+  background: linear-gradient(90deg, 
+    rgba(59, 130, 246, 0.15), 
+    rgba(59, 130, 246, 0.3), 
+    rgba(59, 130, 246, 0.15)
+  );
+  background-size: 200% 100%;
+  animation: pulse-gradient 2s ease-in-out infinite;
+  padding: 2px 4px;
+  border-radius: 3px;
+  color: inherit;
+  opacity: 0.9;
+  transition: opacity 0.2s;
+}
+
+@keyframes pulse-gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}

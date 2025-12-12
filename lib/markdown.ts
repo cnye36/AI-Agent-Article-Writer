@@ -356,7 +356,7 @@ function parseInlineText(text: string): JSONContent[] {
     }
 
     // Add matched content with marks
-    const marks: any[] = [];
+    const marks: NonNullable<JSONContent["marks"]> = [];
     if (match.type === "bold") {
       marks.push({ type: "bold" });
     } else if (match.type === "italic") {

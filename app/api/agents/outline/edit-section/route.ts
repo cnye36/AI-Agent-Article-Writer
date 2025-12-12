@@ -108,7 +108,7 @@ Important:
 
     // Call OpenAI to rewrite the section
     const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4",
+      model: process.env.OPENAI_MODEL || "gpt-4.1",
       temperature: 0.7,
       messages: [
         {

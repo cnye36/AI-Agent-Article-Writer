@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import type { Article, ArticleVersion } from "@/types";
 
 // Request validation schemas
 const CreateArticleSchema = z.object({
@@ -30,9 +31,13 @@ const UpdateArticleSchema = z.object({
 const SearchArticlesSchema = z.object({
   query: z.string().optional(),
   industryId: z.string().uuid().optional(),
-  articleType: z.enum(["blog", "technical", "news", "opinion", "tutorial"]).optional(),
+  articleType: z
+    .enum(["blog", "technical", "news", "opinion", "tutorial"])
+    .optional(),
   status: z.enum(["draft", "review", "published"]).optional(),
-  sortBy: z.enum(["created_at", "updated_at", "title", "word_count"]).default("updated_at"),
+  sortBy: z
+    .enum(["created_at", "updated_at", "title", "word_count"])
+    .default("updated_at"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
   limit: z.number().min(1).max(100).default(20),
   offset: z.number().min(0).default(0),
@@ -75,19 +80,28 @@ export async function GET(request: NextRequest) {
     const validationResult = SearchArticlesSchema.safeParse(params);
     if (!validationResult.success) {
       return NextResponse.json(
-        { error: "Invalid parameters", details: validationResult.error.flatten() },
+        {
+          error: "Invalid parameters",
+          details: validationResult.error.flatten(),
+        },
         { status: 400 }
       );
     }
 
-    const { query, industryId, articleType, status, sortBy, sortOrder, limit, offset } =
-      validationResult.data;
+    const {
+      query,
+      industryId,
+      articleType,
+      status,
+      sortBy,
+      sortOrder,
+      limit,
+      offset,
+    } = validationResult.data;
 
     // Build query
-    let dbQuery = supabase
-      .from("articles")
-      .select(
-        `
+    let dbQuery = supabase.from("articles").select(
+      `
         id,
         title,
         slug,
@@ -107,8 +121,8 @@ export async function GET(request: NextRequest) {
           slug
         )
       `,
-        { count: "exact" }
-      );
+      { count: "exact" }
+    );
 
     // Apply filters
     if (query) {
@@ -185,8 +199,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { title, content, excerpt, industryId, articleType, status, seoKeywords, outlineId } =
-      validationResult.data;
+    const {
+      title,
+      content,
+      excerpt,
+      industryId,
+      articleType,
+      status,
+      seoKeywords,
+      outlineId,
+    } = validationResult.data;
 
     // Generate slug
     const slug = await generateUniqueSlug(supabase, title);
@@ -202,23 +224,26 @@ export async function POST(request: NextRequest) {
     const contentHtml = convertMarkdownToHtml(content);
 
     // Create article
+    const insertData: Omit<Article, "id" | "created_at" | "updated_at"> = {
+      title,
+      slug,
+      content,
+      content_html: contentHtml,
+      excerpt: finalExcerpt,
+      industry_id: industryId,
+      article_type: articleType,
+      status,
+      word_count: wordCount,
+      reading_time: readingTime,
+      seo_keywords: seoKeywords || [],
+      outline_id: outlineId ?? null,
+      published_at: status === "published" ? new Date().toISOString() : null,
+      published_to: [],
+    };
+
     const { data: article, error: insertError } = await supabase
       .from("articles")
-      .insert({
-        title,
-        slug,
-        content,
-        content_html: contentHtml,
-        excerpt: finalExcerpt,
-        industry_id: industryId,
-        article_type: articleType,
-        status,
-        word_count: wordCount,
-        reading_time: readingTime,
-        seo_keywords: seoKeywords || [],
-        outline_id: outlineId,
-        published_at: status === "published" ? new Date().toISOString() : null,
-      })
+      .insert(insertData)
       .select(
         `
         *,
@@ -236,12 +261,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Create initial version
-    await supabase.from("article_versions").insert({
+    const versionData: Omit<ArticleVersion, "id" | "created_at"> = {
       article_id: article.id,
       content,
       edited_by: "user",
       change_summary: "Initial creation",
-    });
+    };
+    await supabase.from("article_versions").insert(versionData);
 
     return NextResponse.json({
       success: true,
@@ -366,13 +392,18 @@ export async function PUT(request: NextRequest) {
     }
 
     // Save version if content changed
-    if (saveVersion && content !== undefined && content !== currentArticle.content) {
-      await supabase.from("article_versions").insert({
+    if (
+      saveVersion &&
+      content !== undefined &&
+      content !== currentArticle.content
+    ) {
+      const versionData: Omit<ArticleVersion, "id" | "created_at"> = {
         article_id: id,
         content,
         edited_by: editedBy,
         change_summary: changeSummary || `Updated by ${editedBy}`,
-      });
+      };
+      await supabase.from("article_versions").insert(versionData);
     }
 
     return NextResponse.json({
@@ -447,7 +478,10 @@ export async function DELETE(request: NextRequest) {
 }
 
 // Helper: Get single article with full details
-async function getSingleArticle(supabase: any, id: string) {
+async function getSingleArticle(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string
+) {
   const { data: article, error } = await supabase
     .from("articles")
     .select(
@@ -522,7 +556,7 @@ async function getSingleArticle(supabase: any, id: string) {
 
 // Helper: Generate unique slug
 async function generateUniqueSlug(
-  supabase: any,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   title: string,
   excludeId?: string
 ): Promise<string> {
@@ -536,17 +570,13 @@ async function generateUniqueSlug(
   let counter = 1;
 
   while (true) {
-    let query = supabase
-      .from("articles")
-      .select("id")
-      .eq("slug", slug)
-      .single();
+    let query = supabase.from("articles").select("id").eq("slug", slug);
 
     if (excludeId) {
       query = query.neq("id", excludeId);
     }
 
-    const { data } = await query;
+    const { data } = await query.single();
 
     if (!data) {
       return slug;
