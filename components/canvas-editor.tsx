@@ -21,7 +21,9 @@ interface CanvasEditorProps {
 export function CanvasEditor({ initialContent, articleId, articleType, onSave, onPublish }: CanvasEditorProps) {
   const [selectedText, setSelectedText] = useState("");
   const [aiPanelOpen, setAiPanelOpen] = useState(true); // Visible by default on desktop
-  const [aiAction, setAiAction] = useState<"rewrite" | "expand" | "simplify" | "custom">("rewrite");
+  const [aiAction, setAiAction] = useState<
+    "rewrite" | "expand" | "simplify" | "custom"
+  >("rewrite");
   const [linkUrl, setLinkUrl] = useState("");
   const [showLinkInput, setShowLinkInput] = useState(false);
 
@@ -74,7 +76,7 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
   const editor = useEditor({
     extensions: [
       StarterKit, // Includes markdown shortcuts by default (e.g., **bold**, *italic*, # heading)
-      Link.configure({ 
+      Link.configure({
         openOnClick: false,
         HTMLAttributes: {
           class: "text-blue-500 hover:text-blue-400 underline",
@@ -99,6 +101,22 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
     },
   });
 
+  // Update editor content when initialContent changes (e.g., during article generation)
+  useEffect(() => {
+    if (!editor || !initialContent) return;
+
+    const currentContent = tiptapToMarkdown(editor.getJSON());
+    // Only update if the new content is different and longer (to avoid overwriting with partial content)
+    // This allows the editor to update during streaming without overwriting user edits
+    if (
+      initialContent !== currentContent &&
+      initialContent.length > currentContent.length
+    ) {
+      editor.commands.setContent(markdownToTiptap(initialContent));
+      lastSavedContentRef.current = initialContent;
+    }
+  }, [editor, initialContent]);
+
   // Handle save on unmount - save immediately if there are unsaved changes
   useEffect(() => {
     return () => {
@@ -107,7 +125,7 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
         if (saveTimeoutRef.current) {
           clearTimeout(saveTimeoutRef.current);
         }
-        
+
         // Save immediately if content changed
         const markdown = tiptapToMarkdown(editor.getJSON());
         if (markdown !== lastSavedContentRef.current) {
@@ -117,17 +135,25 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
     };
   }, [editor]);
 
-  const handleAiEdit = useCallback(async (action: string, customPrompt?: string) => {
-    if (!selectedText || !editor) return;
+  const handleAiEdit = useCallback(
+    async (action: string, customPrompt?: string) => {
+      if (!selectedText || !editor) return;
 
-    const prompt = customPrompt || getPromptForAction(action, selectedText);
-    const result = await complete(prompt);
-    
-    if (result) {
-      const { from, to } = editor.state.selection;
-      editor.chain().focus().deleteRange({ from, to }).insertContent(result).run();
-    }
-  }, [selectedText, editor, complete]);
+      const prompt = customPrompt || getPromptForAction(action, selectedText);
+      const result = await complete(prompt);
+
+      if (result) {
+        const { from, to } = editor.state.selection;
+        editor
+          .chain()
+          .focus()
+          .deleteRange({ from, to })
+          .insertContent(result)
+          .run();
+      }
+    },
+    [selectedText, editor, complete]
+  );
 
   const handleBold = useCallback(() => {
     if (!editor) return;
@@ -136,7 +162,7 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
 
   const handleLink = useCallback(() => {
     if (!editor) return;
-    
+
     if (showLinkInput && linkUrl) {
       editor.chain().focus().setLink({ href: linkUrl, target: "_blank" }).run();
       setLinkUrl("");
@@ -146,14 +172,17 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
     }
   }, [editor, showLinkInput, linkUrl]);
 
-  const handleHeading = useCallback((level: 1 | 2 | 3) => {
-    if (!editor) return;
-    if (editor.isActive("heading", { level })) {
-      editor.chain().focus().setParagraph().run();
-    } else {
-      editor.chain().focus().toggleHeading({ level }).run();
-    }
-  }, [editor]);
+  const handleHeading = useCallback(
+    (level: 1 | 2 | 3) => {
+      if (!editor) return;
+      if (editor.isActive("heading", { level })) {
+        editor.chain().focus().setParagraph().run();
+      } else {
+        editor.chain().focus().toggleHeading({ level }).run();
+      }
+    },
+    [editor]
+  );
 
   const isBold = editor?.isActive("bold") || false;
   const isLink = editor?.isActive("link") || false;
@@ -164,7 +193,11 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
   return (
     <div className="flex flex-col lg:flex-row h-full relative">
       {/* Main Editor */}
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0 relative">
+      <div
+        className={`flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0 relative transition-all duration-300 ${
+          aiPanelOpen ? "lg:pr-96" : ""
+        }`}
+      >
         {/* Formatting Toolbar */}
         {editor && (
           <div className="sticky top-0 z-10 mb-4 bg-zinc-900/95 backdrop-blur-sm border border-zinc-800 rounded-lg p-2 flex items-center gap-2 flex-wrap">
@@ -261,14 +294,14 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
         >
           <span className="text-xl">💬</span>
         </button>
-        
+
         <div className="max-w-3xl mx-auto">
-          <EditorContent 
-            editor={editor} 
+          <EditorContent
+            editor={editor}
             className="editor-content min-h-[400px] sm:min-h-[500px] lg:min-h-[600px] focus:outline-none"
           />
         </div>
-        
+
         {/* Floating AI Menu on Selection */}
         {editor && (
           <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
@@ -302,13 +335,15 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
         )}
       </div>
 
-      {/* AI Assistant Panel - Mobile: Overlay, Desktop: Sidebar */}
-      <div className={`fixed lg:relative inset-0 lg:inset-auto z-50 lg:z-auto ${
-        aiPanelOpen 
-          ? 'translate-x-0' 
-          : 'translate-x-full'
-      } transition-transform duration-300`}>
-        <div className={`w-full sm:w-80 lg:w-96 h-full border-l border-zinc-800 bg-zinc-950 flex flex-col`}>
+      {/* AI Assistant Panel - Mobile: Overlay, Desktop: Fixed Sidebar */}
+      <div
+        className={`fixed inset-0 lg:top-[64px] lg:bottom-0 lg:right-0 lg:left-auto z-50 transition-transform duration-300 ${
+          aiPanelOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div
+          className={`w-full sm:w-80 lg:w-96 h-full border-l border-zinc-800 bg-zinc-950 flex flex-col`}
+        >
           <AIAssistantPanel
             selectedText={selectedText}
             onApply={handleAiEdit}
@@ -321,7 +356,7 @@ export function CanvasEditor({ initialContent, articleId, articleType, onSave, o
 
       {/* Mobile overlay backdrop */}
       {aiPanelOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setAiPanelOpen(false)}
         />

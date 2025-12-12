@@ -391,8 +391,8 @@ async function handleSuggestLinks(supabase: any, body: any) {
 
   // Use AI to find best matches for the selected text
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || "gpt-5.1",
-    max_tokens: 1024,
+    model: process.env.OPENAI_MODEL || "gpt-5.2",
+    reasoning_effort: "medium",
     messages: [
       {
         role: "system",
@@ -417,7 +417,10 @@ Available articles to link to:
 ${candidates
   .map(
     (a: any) =>
-      `- ID: ${a.id}, Title: "${a.title}", Excerpt: "${a.excerpt?.substring(0, 100)}..."`
+      `- ID: ${a.id}, Title: "${a.title}", Excerpt: "${a.excerpt?.substring(
+        0,
+        100
+      )}..."`
   )
   .join("\n")}
 
@@ -466,8 +469,8 @@ async function generateLinkSuggestions(
   maxSuggestions: number
 ): Promise<any[]> {
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || "gpt-5.1",
-    max_tokens: 2048,
+    model: process.env.OPENAI_MODEL || "gpt-5.2",
+    reasoning_effort: "medium",
     messages: [
       {
         role: "system",
@@ -503,7 +506,9 @@ Available articles to link to:
 ${potentialTargets
   .map(
     (a) =>
-      `- ID: ${a.id}, Title: "${a.title}", Keywords: ${a.seo_keywords?.join(", ") || "none"}, Excerpt: "${a.excerpt?.substring(0, 80)}..."`
+      `- ID: ${a.id}, Title: "${a.title}", Keywords: ${
+        a.seo_keywords?.join(", ") || "none"
+      }, Excerpt: "${a.excerpt?.substring(0, 80)}..."`
   )
   .join("\n")}
 
@@ -525,9 +530,7 @@ Suggest valuable internal links.`,
         return content.toLowerCase().includes(s.anchorText.toLowerCase());
       })
       .map((s: any) => {
-        const target = potentialTargets.find(
-          (t) => t.id === s.targetArticleId
-        );
+        const target = potentialTargets.find((t) => t.id === s.targetArticleId);
         return {
           ...s,
           targetArticle: target

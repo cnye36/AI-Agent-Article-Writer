@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useArticleGeneration } from "@/hooks/use-article-generation";
 import { useStreamingWriter } from "@/hooks/use-streaming-writer";
 import type { ArticleType, GenerationConfig, Topic } from "@/types";
@@ -23,7 +24,12 @@ interface CreateArticleFlowProps {
   onBackToTopicsFeed?: () => void;
 }
 
-export function CreateArticleFlow({ initialTopic, onTopicProcessed, onBackToTopicsFeed }: CreateArticleFlowProps = {}) {
+export function CreateArticleFlow({
+  initialTopic,
+  onTopicProcessed,
+  onBackToTopicsFeed,
+}: CreateArticleFlowProps = {}) {
+  const router = useRouter();
   const {
     stage,
     config,
@@ -38,7 +44,7 @@ export function CreateArticleFlow({ initialTopic, onTopicProcessed, onBackToTopi
     article,
     isLoading,
     goToStage,
-    error
+    error,
   } = useArticleGeneration();
 
   // Streaming writer for real-time article generation
@@ -49,15 +55,33 @@ export function CreateArticleFlow({ initialTopic, onTopicProcessed, onBackToTopi
     error: streamingError,
     startStreaming,
     cancelStreaming,
-    reset: resetStreaming,
-  } = useStreamingWriter();
+  } = useStreamingWriter({
+    onArticleCreated: () => {
+      // Article placeholder created in database
+      // Hide the "starting" dialog - streaming UI will take over
+      setIsStartingWriting(false);
+    },
+    onArticleReady: (article) => {
+      // Article is complete - navigate to the article page
+      // (StreamingContentStage component handles the delay before redirect)
+      if (article?.id) {
+        router.push(`/article/${article.id}`);
+      }
+    },
+    onError: () => {
+      // Hide loading dialog on error
+      setIsStartingWriting(false);
+    },
+  });
 
   // Track processed topics to avoid reprocessing
   const processedTopicIds = useRef<Set<string>>(new Set());
   // Track if we came from the Topic Feed (so we know to redirect back to topics tab)
   const cameFromFeed = useRef<boolean>(false);
-  // Track if we're using streaming mode
-  const [useStreaming, setUseStreaming] = useState(true);
+  // Track if we're using streaming mode (always true for now)
+  const useStreaming = true;
+  // Track if we're starting the writing process
+  const [isStartingWriting, setIsStartingWriting] = useState(false);
 
   // Handle initial topic selection from Topic Feed
   useEffect(() => {
@@ -73,24 +97,43 @@ export function CreateArticleFlow({ initialTopic, onTopicProcessed, onBackToTopi
 
       // Set config based on topic's industry if available
       if (initialTopic.industry_id || initialTopic.industries) {
-        const industryId = initialTopic.industry_id || initialTopic.industries?.id;
+        const industryId =
+          initialTopic.industry_id || initialTopic.industries?.id;
         if (industryId) {
           setConfig({ industry: industryId });
         }
       }
       // Select the topic which will generate the outline
-      selectTopic(initialTopic).then(() => {
-        // Notify parent that topic has been processed
-        onTopicProcessed?.();
-      }).catch((error) => {
-        console.error("Error selecting initial topic:", error);
-        // Remove from processed set so it can be retried
-        processedTopicIds.current.delete(initialTopic.id);
-        cameFromFeed.current = false;
-        onTopicProcessed?.();
-      });
+      selectTopic(initialTopic)
+        .then(() => {
+          // Notify parent that topic has been processed
+          onTopicProcessed?.();
+        })
+        .catch((error) => {
+          console.error("Error selecting initial topic:", error);
+          // Remove from processed set so it can be retried
+          processedTopicIds.current.delete(initialTopic.id);
+          cameFromFeed.current = false;
+          onTopicProcessed?.();
+        });
     }
-  }, [initialTopic, stage, selectTopic, setConfig, onTopicProcessed, isLoading]);
+  }, [
+    initialTopic,
+    stage,
+    selectTopic,
+    setConfig,
+    onTopicProcessed,
+    isLoading,
+  ]);
+
+  // Debug logging
+  console.log("[CreateArticleFlow] Current state:", {
+    stage,
+    useStreaming,
+    hasStreamedArticle: !!streamedArticle,
+    hasStreamingProgress: !!streamingProgress,
+    isStreaming: !!streamingProgress || !!streamingContent.hook || streamingContent.sections.length > 0,
+  });
 
   return (
     <div className="max-w-6xl mx-auto w-full">
@@ -103,9 +146,20 @@ export function CreateArticleFlow({ initialTopic, onTopicProcessed, onBackToTopi
 
       {/* Loading Dialog - Show when selecting a topic from feed or from topics stage */}
       <LoadingDialog
-        isOpen={isLoading && ((stage === "config" && !!initialTopic) || (stage === "topics" && topics.length > 0))}
+        isOpen={
+          isLoading &&
+          ((stage === "config" && !!initialTopic) ||
+            (stage === "topics" && topics.length > 0))
+        }
         title="Creating Outline"
         message="Creating an outline for your selected topic. This may take a moment..."
+      />
+
+      {/* Loading Dialog - Show when starting to write article */}
+      <LoadingDialog
+        isOpen={isStartingWriting}
+        title="Starting Article Generation"
+        message="Preparing to write your article. You'll be redirected to the editor shortly..."
       />
 
       {/* Progress Steps */}
@@ -116,13 +170,18 @@ export function CreateArticleFlow({ initialTopic, onTopicProcessed, onBackToTopi
               onClick={() => goToStage(s as Stage)}
               disabled={getStageIndex(stage) < i}
               className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                stage === s ? "bg-blue-600" : 
-                getStageIndex(stage) > i ? "bg-green-600 hover:bg-green-500 cursor-pointer" : "bg-zinc-800 hover:bg-zinc-700 cursor-pointer"
+                stage === s
+                  ? "bg-blue-600"
+                  : getStageIndex(stage) > i
+                  ? "bg-green-600 hover:bg-green-500 cursor-pointer"
+                  : "bg-zinc-800 hover:bg-zinc-700 cursor-pointer"
               }`}
             >
               {getStageIndex(stage) > i ? "✓" : i + 1}
             </button>
-            {i < 3 && <div className="w-8 sm:w-16 h-0.5 bg-zinc-800 mx-1 sm:mx-2" />}
+            {i < 3 && (
+              <div className="w-8 sm:w-16 h-0.5 bg-zinc-800 mx-1 sm:mx-2" />
+            )}
           </div>
         ))}
       </div>
@@ -136,8 +195,8 @@ export function CreateArticleFlow({ initialTopic, onTopicProcessed, onBackToTopi
 
       {/* Stage Content */}
       {stage === "config" && (
-        <ConfigStage 
-          config={config} 
+        <ConfigStage
+          config={config}
           onChange={(updates) => setConfig(updates)}
           onNext={() => {
             // Reset cameFromFeed flag when starting new research from config
@@ -166,9 +225,23 @@ export function CreateArticleFlow({ initialTopic, onTopicProcessed, onBackToTopi
           isLoading={isLoading}
           onApprove={async () => {
             if (useStreaming && outline) {
-              // Use streaming mode for better UX
-              goToStage("content");
-              await startStreaming(outline.id);
+              console.log("[CreateArticleFlow] Starting streaming mode for outline:", outline.id);
+              // Show loading dialog briefly while initializing
+              setIsStartingWriting(true);
+              try {
+                // Change stage to content to show streaming UI
+                console.log("[CreateArticleFlow] Changing stage to content");
+                goToStage("content");
+                console.log("[CreateArticleFlow] Stage changed, starting stream");
+                // Start streaming - the hook will handle navigation when article is ready
+                await startStreaming(outline.id);
+                console.log("[CreateArticleFlow] Streaming completed");
+              } catch (error) {
+                console.error("[CreateArticleFlow] Error starting streaming:", error);
+                setIsStartingWriting(false);
+                // Go back to outline on error
+                goToStage("outline");
+              }
             } else {
               // Fall back to traditional non-streaming mode
               approveOutline();

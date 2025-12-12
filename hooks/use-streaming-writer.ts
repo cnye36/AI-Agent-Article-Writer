@@ -19,6 +19,12 @@ export interface StreamingContent {
   currentSection: number;
 }
 
+interface UseStreamingWriterOptions {
+  onArticleReady?: (article: Article | null) => void;
+  onArticleCreated?: (articleId: string) => void;
+  onError?: () => void;
+}
+
 interface UseStreamingWriterReturn {
   isStreaming: boolean;
   progress: StreamingProgress | null;
@@ -30,7 +36,10 @@ interface UseStreamingWriterReturn {
   reset: () => void;
 }
 
-export function useStreamingWriter(): UseStreamingWriterReturn {
+export function useStreamingWriter(
+  options?: UseStreamingWriterOptions
+): UseStreamingWriterReturn {
+  const { onArticleReady, onArticleCreated, onError } = options || {};
   const [isStreaming, setIsStreaming] = useState(false);
   const [progress, setProgress] = useState<StreamingProgress | null>(null);
   const [content, setContent] = useState<StreamingContent>({
@@ -45,152 +54,185 @@ export function useStreamingWriter(): UseStreamingWriterReturn {
   const abortControllerRef = useRef<AbortController | null>(null);
   const currentSectionRef = useRef<number>(-1);
 
-  const startStreaming = useCallback(async (outlineId: string) => {
-    setIsStreaming(true);
-    setError(null);
-    setProgress(null);
-    setContent({
-      hook: "",
-      sections: [],
-      conclusion: "",
-      currentSection: -1,
-    });
-    setArticle(null);
-    currentSectionRef.current = -1;
-
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    try {
-      const response = await fetch("/api/agents/writer", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outlineId }),
-        signal: abortController.signal,
+  const startStreaming = useCallback(
+    async (outlineId: string) => {
+      console.log("[StreamingWriter] Starting stream for outline:", outlineId);
+      setIsStreaming(true);
+      setError(null);
+      setProgress(null);
+      setContent({
+        hook: "",
+        sections: [],
+        conclusion: "",
+        currentSection: -1,
       });
+      setArticle(null);
+      currentSectionRef.current = -1;
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
 
-      if (!response.body) {
-        throw new Error("No response body");
-      }
+      try {
+        const response = await fetch("/api/agents/writer", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ outlineId }),
+          signal: abortController.signal,
+        });
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
+        console.log("[StreamingWriter] Response status:", response.status);
 
-      while (true) {
-        const { done, value } = await reader.read();
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-        if (done) break;
+        if (!response.body) {
+          throw new Error("No response body");
+        }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-        // Keep the last incomplete line in the buffer
-        buffer = lines.pop() || "";
+        while (true) {
+          const { done, value } = await reader.read();
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
+          if (done) break;
 
-            try {
-              const event = JSON.parse(data);
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
 
-              switch (event.type) {
-                case "progress":
-                  setProgress({
-                    stage: event.stage,
-                    message: event.message,
-                    progress: event.progress || 0,
-                    section: event.section,
-                    total: event.total,
-                    sectionTitle: event.sectionTitle,
-                  });
+          // Keep the last incomplete line in the buffer
+          buffer = lines.pop() || "";
 
-                  // Initialize new section when switching sections
-                  if (event.stage === "section" && event.section !== currentSectionRef.current) {
-                    currentSectionRef.current = event.section || 0;
-                    setContent((prev) => {
-                      const newSections = [...prev.sections];
-                      newSections[currentSectionRef.current - 1] = "";
-                      return {
-                        ...prev,
-                        sections: newSections,
-                        currentSection: currentSectionRef.current - 1,
-                      };
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6);
+
+              try {
+                const event = JSON.parse(data);
+                console.log("[StreamingWriter] Event received:", event.type, event);
+
+                switch (event.type) {
+                  case "article_created":
+                    // Article placeholder created - navigate immediately
+                    console.log("[StreamingWriter] Article created:", event.articleId);
+                    if (onArticleCreated && event.articleId) {
+                      onArticleCreated(event.articleId);
+                    }
+                    break;
+
+                  case "progress":
+                    console.log("[StreamingWriter] Progress:", event.stage, event.progress);
+                    setProgress({
+                      stage: event.stage,
+                      message: event.message,
+                      progress: event.progress || 0,
+                      section: event.section,
+                      total: event.total,
+                      sectionTitle: event.sectionTitle,
                     });
-                  }
-                  break;
 
-                case "token":
-                  // Append token to the appropriate part of content
-                  if (event.stage === "hook") {
-                    setContent((prev) => ({
-                      ...prev,
-                      hook: prev.hook + event.content,
-                    }));
-                  } else if (event.stage === "section") {
-                    setContent((prev) => {
-                      const newSections = [...prev.sections];
-                      const index = prev.currentSection;
-                      if (index >= 0) {
-                        newSections[index] = (newSections[index] || "") + event.content;
-                      }
-                      return {
+                    // Initialize new section when switching sections
+                    if (
+                      event.stage === "section" &&
+                      event.section !== currentSectionRef.current
+                    ) {
+                      currentSectionRef.current = event.section || 0;
+                      setContent((prev) => {
+                        const newSections = [...prev.sections];
+                        newSections[currentSectionRef.current - 1] = "";
+                        return {
+                          ...prev,
+                          sections: newSections,
+                          currentSection: currentSectionRef.current - 1,
+                        };
+                      });
+                    }
+                    break;
+
+                  case "token":
+                    // Append token to the appropriate part of content
+                    if (event.stage === "hook") {
+                      setContent((prev) => ({
                         ...prev,
-                        sections: newSections,
-                      };
+                        hook: prev.hook + event.content,
+                      }));
+                    } else if (event.stage === "section") {
+                      setContent((prev) => {
+                        const newSections = [...prev.sections];
+                        const index = prev.currentSection;
+                        if (index >= 0) {
+                          newSections[index] =
+                            (newSections[index] || "") + event.content;
+                        }
+                        return {
+                          ...prev,
+                          sections: newSections,
+                        };
+                      });
+                    } else if (event.stage === "conclusion") {
+                      setContent((prev) => ({
+                        ...prev,
+                        conclusion: prev.conclusion + event.content,
+                      }));
+                    }
+                    break;
+
+                  case "complete":
+                    const completedArticle = event.article;
+                    setArticle(completedArticle);
+                    setProgress({
+                      stage: "complete",
+                      message: "Article complete!",
+                      progress: 100,
                     });
-                  } else if (event.stage === "conclusion") {
-                    setContent((prev) => ({
-                      ...prev,
-                      conclusion: prev.conclusion + event.content,
-                    }));
-                  }
-                  break;
+                    setIsStreaming(false);
+                    // Call callback if provided
+                    if (onArticleReady && completedArticle) {
+                      onArticleReady(completedArticle);
+                    }
+                    break;
 
-                case "complete":
-                  setArticle(event.article);
-                  setProgress({
-                    stage: "complete",
-                    message: "Article complete!",
-                    progress: 100,
-                  });
-                  setIsStreaming(false);
-                  break;
+                  case "error":
+                    setError(event.message || "Unknown error occurred");
+                    setIsStreaming(false);
+                    if (onError) {
+                      onError();
+                    }
+                    break;
 
-                case "error":
-                  setError(event.message || "Unknown error occurred");
-                  setIsStreaming(false);
-                  break;
+                  case "warning":
+                    console.warn("Streaming warning:", event.message);
+                    break;
 
-                case "warning":
-                  console.warn("Streaming warning:", event.message);
-                  break;
-
-                default:
-                  console.log("Unknown event type:", event.type);
+                  default:
+                    console.log("Unknown event type:", event.type);
+                }
+              } catch (parseError) {
+                console.error("Error parsing SSE data:", parseError, data);
               }
-            } catch (parseError) {
-              console.error("Error parsing SSE data:", parseError, data);
             }
           }
         }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          setError("Article generation was cancelled");
+        } else {
+          setError(
+            err instanceof Error ? err.message : "Failed to generate article"
+          );
+        }
+        setIsStreaming(false);
+        if (onError) {
+          onError();
+        }
+      } finally {
+        abortControllerRef.current = null;
       }
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        setError("Article generation was cancelled");
-      } else {
-        setError(err instanceof Error ? err.message : "Failed to generate article");
-      }
-      setIsStreaming(false);
-    } finally {
-      abortControllerRef.current = null;
-    }
-  }, []);
+    },
+    [onArticleReady, onArticleCreated, onError]
+  );
 
   const cancelStreaming = useCallback(() => {
     if (abortControllerRef.current) {

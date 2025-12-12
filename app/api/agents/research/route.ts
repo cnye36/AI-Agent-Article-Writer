@@ -190,11 +190,14 @@ export async function POST(request: NextRequest) {
         // Only check for duplicates if we have an embedding
         if (topic.embedding) {
           try {
-            const { data: similar } = await supabase.rpc("find_similar_topics", {
-              query_embedding: topic.embedding,
-              similarity_threshold: 0.85, // 85% similar = likely duplicate
-              match_count: 5,
-            });
+            const { data: similar } = await(supabase.rpc as any)(
+              "find_similar_topics",
+              {
+                query_embedding: topic.embedding,
+                similarity_threshold: 0.85, // 85% similar = likely duplicate
+                match_count: 5,
+              }
+            );
 
             similarTopics = (similar || []) as Array<{
               id: string;

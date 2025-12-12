@@ -78,8 +78,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { topicId, articleType, targetLength, tone } =
-      validationResult.data;
+    const { topicId, articleType, targetLength, tone } = validationResult.data;
 
     // Fetch the topic
     const { data: topicData, error: topicError } = await supabase
@@ -98,10 +97,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (topicError || !topicData) {
-      return NextResponse.json(
-        { error: "Topic not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Topic not found" }, { status: 404 });
     }
 
     const topic = topicData as any;
@@ -133,11 +129,14 @@ export async function POST(request: NextRequest) {
       articleType,
       targetLength,
       tone,
-      relatedArticles: (relatedArticles || []).map((a: { id: string; title: string; slug: string }) => ({
-        id: a.id,
-        title: a.title,
-        slug: a.slug,
-      })),
+      relatedArticles: (relatedArticles || []).map(
+        (a: { id: string; title: string; slug: string }) => ({
+          id: a.id,
+          title: a.title,
+          slug: a.slug,
+        })
+      ),
+      freshSources: [], // Will be populated by the search node
     });
 
     // Enhance outline with word targets
@@ -150,14 +149,16 @@ export async function POST(request: NextRequest) {
         totalWordTarget: lengthConfig.target,
         sectionCount,
       },
-      sections: (result.outline.sections || []).map((section: { heading: string; keyPoints: string[] }, index: number) => ({
-        ...section,
-        wordTarget: calculateSectionWordTarget(
-          index,
-          result.outline.sections.length,
-          lengthConfig.target
-        ),
-      })),
+      sections: (result.outline.sections || []).map(
+        (section: { heading: string; keyPoints: string[] }, index: number) => ({
+          ...section,
+          wordTarget: calculateSectionWordTarget(
+            index,
+            result.outline.sections.length,
+            lengthConfig.target
+          ),
+        })
+      ),
     };
 
     // Save outline to database
@@ -187,9 +188,7 @@ export async function POST(request: NextRequest) {
     // Update topic status
     try {
       const topicsTable = supabase.from("topics") as any;
-      await topicsTable
-        .update({ status: "approved" })
-        .eq("id", topicId);
+      await topicsTable.update({ status: "approved" }).eq("id", topicId);
     } catch (updateErr) {
       console.error("Error updating topic status:", updateErr);
       // Continue even if update fails
@@ -198,11 +197,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       outline: savedOutline,
-      relatedArticles: (relatedArticles || []).map((a: { id: string; title: string; slug: string }) => ({
-        id: a.id,
-        title: a.title,
-        slug: a.slug,
-      })),
+      relatedArticles: (relatedArticles || []).map(
+        (a: { id: string; title: string; slug: string }) => ({
+          id: a.id,
+          title: a.title,
+          slug: a.slug,
+        })
+      ),
     });
   } catch (error) {
     console.error("Outline agent error:", error);
@@ -359,6 +360,401 @@ export async function PATCH(request: NextRequest) {
       { error: "Failed to update outline" },
       { status: 500 }
     );
+  }
+}
+
+// Streaming endpoint for progressive outline generation
+export async function PUT(request: NextRequest) {
+  const encoder = new TextEncoder();
+
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "error",
+                message: "Unauthorized",
+              })}\n\n`
+            )
+          );
+          controller.close();
+        },
+      });
+      return new Response(errorStream, {
+        status: 401,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
+
+    const body = await request.json();
+    const validationResult = OutlineRequestSchema.safeParse(body);
+
+    if (!validationResult.success) {
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "error",
+                message: "Invalid request",
+                details: validationResult.error.flatten(),
+              })}\n\n`
+            )
+          );
+          controller.close();
+        },
+      });
+      return new Response(errorStream, {
+        status: 400,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
+
+    const { topicId, articleType, targetLength, tone } = validationResult.data;
+
+    // Fetch the topic
+    const { data: topicData, error: topicError } = await supabase
+      .from("topics")
+      .select(
+        `
+        *,
+        industries (
+          id,
+          name,
+          slug
+        )
+      `
+      )
+      .eq("id", topicId)
+      .single();
+
+    if (topicError || !topicData) {
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "error",
+                message: "Topic not found",
+              })}\n\n`
+            )
+          );
+          controller.close();
+        },
+      });
+      return new Response(errorStream, {
+        status: 404,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
+
+    const topic = topicData as any;
+
+    // Fetch related articles
+    const { data: relatedArticles } = await supabase
+      .from("articles")
+      .select("id, title, slug, excerpt, seo_keywords")
+      .eq("industry_id", topic.industry_id)
+      .eq("status", "published")
+      .limit(10);
+
+    // Calculate section word targets
+    const typeConfig = ARTICLE_TYPE_CONFIG[articleType];
+    const lengthConfig = LENGTH_CONFIG[targetLength];
+    const sectionCount = typeConfig.sectionCount[targetLength];
+
+    // Create placeholder outline immediately
+    const placeholderOutline = {
+      title: "Generating...",
+      hook: "",
+      sections: [],
+      conclusion: { summary: "", callToAction: "" },
+      seoKeywords: [],
+      metadata: {
+        articleType,
+        targetLength,
+        tone,
+        totalWordTarget: lengthConfig.target,
+        sectionCount,
+      },
+    };
+
+    const { data: savedOutline, error: insertError } = await supabase
+      .from("outlines")
+      .insert({
+        topic_id: topicId,
+        structure: placeholderOutline,
+        article_type: articleType,
+        target_length: targetLength,
+        tone,
+        approved: false,
+      } as any)
+      .select()
+      .single();
+
+    if (insertError || !savedOutline) {
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "error",
+                message: "Failed to create outline placeholder",
+              })}\n\n`
+            )
+          );
+          controller.close();
+        },
+      });
+      return new Response(errorStream, {
+        status: 500,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
+
+    // Store outline ID for use in stream
+    const outlineId = (savedOutline as any).id;
+
+    // Create streaming response
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Send outline ID immediately
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "outline_created",
+                outlineId,
+              })}\n\n`
+            )
+          );
+
+          // Stream search progress
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "progress",
+                stage: "searching",
+                message: "Searching for latest information...",
+                progress: 5,
+              })}\n\n`
+            )
+          );
+
+          // Initialize outline agent
+          const outlineAgent = createOutlineAgent();
+
+          // Generate outline using the agent (search happens inside)
+          const result = await outlineAgent.invoke({
+            topic: {
+              title: topic.title,
+              summary: topic.summary || "",
+              sources: topic.sources || [], // Use existing sources immediately
+              angle: topic.metadata?.angle || "",
+              relevanceScore: 0.8,
+            },
+            articleType,
+            targetLength,
+            tone,
+            relatedArticles: (relatedArticles || []).map(
+              (a: { id: string; title: string; slug: string }) => ({
+                id: a.id,
+                title: a.title,
+                slug: a.slug,
+              })
+            ),
+            freshSources: [], // Will be populated by the search node
+          });
+
+          // After search completes, update progress
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "progress",
+                stage: "generating",
+                message: "Generating outline structure...",
+                progress: 40,
+              })}\n\n`
+            )
+          );
+
+          const parsedOutline = result.outline;
+
+          // Update progress
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "progress",
+                stage: "processing",
+                message: "Processing outline structure...",
+                progress: 50,
+              })}\n\n`
+            )
+          );
+
+          // Enhance outline with word targets
+          const enhancedOutline = {
+            ...parsedOutline,
+            metadata: {
+              articleType,
+              targetLength,
+              tone,
+              totalWordTarget: lengthConfig.target,
+              sectionCount,
+            },
+            sections: (parsedOutline.sections || []).map(
+              (section: any, index: number) => ({
+                ...section,
+                wordTarget: calculateSectionWordTarget(
+                  index,
+                  parsedOutline.sections.length,
+                  lengthConfig.target
+                ),
+                suggestedLinks: section.suggestedLinks || [],
+              })
+            ),
+          };
+
+          // Update outline in database incrementally
+          let lastUpdateTime = Date.now();
+          const updateOutline = async (partialOutline: any) => {
+            const now = Date.now();
+            if (now - lastUpdateTime > 500) {
+              await (supabase.from("outlines") as any)
+                .update({ structure: partialOutline })
+                .eq("id", outlineId);
+              lastUpdateTime = now;
+            }
+          };
+
+          // Update with title and hook first
+          const titleHookOutline = {
+            ...enhancedOutline,
+            sections: [],
+            conclusion: { summary: "", callToAction: "" },
+          };
+          await updateOutline(titleHookOutline);
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "progress",
+                stage: "title",
+                message: "Outline title and hook generated",
+                progress: 60,
+                outline: titleHookOutline,
+              })}\n\n`
+            )
+          );
+
+          // Update with sections progressively
+          for (let i = 0; i < enhancedOutline.sections.length; i++) {
+            const sectionsSoFar = enhancedOutline.sections.slice(0, i + 1);
+            const partialOutline = {
+              ...enhancedOutline,
+              sections: sectionsSoFar,
+            };
+            await updateOutline(partialOutline);
+
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "progress",
+                  stage: "sections",
+                  message: `Generated section ${i + 1} of ${
+                    enhancedOutline.sections.length
+                  }`,
+                  progress:
+                    60 +
+                    Math.round(
+                      ((i + 1) / enhancedOutline.sections.length) * 30
+                    ),
+                  outline: partialOutline,
+                })}\n\n`
+              )
+            );
+          }
+
+          // Final update with conclusion
+          await (supabase.from("outlines") as any)
+            .update({ structure: enhancedOutline })
+            .eq("id", outlineId);
+
+          // Update topic status
+          try {
+            const topicsTable = supabase.from("topics") as any;
+            await topicsTable.update({ status: "approved" }).eq("id", topicId);
+          } catch (updateErr) {
+            console.error("Error updating topic status:", updateErr);
+          }
+
+          // Send completion
+          const completedOutline = {
+            id: outlineId,
+            ...(savedOutline as any),
+            structure: enhancedOutline,
+          };
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "complete",
+                outline: completedOutline,
+                progress: 100,
+              })}\n\n`
+            )
+          );
+
+          controller.close();
+        } catch (error) {
+          console.error("Streaming outline error:", error);
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "error",
+                message:
+                  error instanceof Error ? error.message : "Unknown error",
+              })}\n\n`
+            )
+          );
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  } catch (error) {
+    console.error("Streaming outline error:", error);
+    const errorStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              type: "error",
+              message: "Failed to stream outline generation",
+            })}\n\n`
+          )
+        );
+        controller.close();
+      },
+    });
+    return new Response(errorStream, {
+      status: 500,
+      headers: { "Content-Type": "text/event-stream" },
+    });
   }
 }
 

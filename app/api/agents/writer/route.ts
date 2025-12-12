@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createWriterAgent } from "@/agents/writer-agent";
 import { z } from "zod";
+import type { Article } from "@/types";
 
 // Request validation schema
 const WriteRequestSchema = z.object({
@@ -62,10 +63,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (outlineError || !outlineData) {
-      return NextResponse.json(
-        { error: "Outline not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Outline not found" }, { status: 404 });
     }
 
     // Type assertion for the outline with joined data
@@ -87,7 +85,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get industry_id - prefer from joined industries, fallback to topic.industry_id
-    const industryId = outline.topics.industries?.id || outline.topics.industry_id;
+    const industryId =
+      outline.topics.industries?.id || outline.topics.industry_id;
     if (!industryId) {
       return NextResponse.json(
         { error: "Industry ID not found for topic" },
@@ -130,7 +129,10 @@ export async function POST(request: NextRequest) {
     const readingTime = Math.ceil(wordCount / 200); // ~200 words per minute
 
     // Extract internal links from the article
-    const internalLinks = extractInternalLinks(result.fullArticle, relatedArticles || []);
+    const internalLinks = extractInternalLinks(
+      result.fullArticle,
+      relatedArticles || []
+    );
 
     // Convert markdown to HTML
     const contentHtml = await convertToHtml(result.fullArticle);
@@ -141,7 +143,7 @@ export async function POST(request: NextRequest) {
     // Save article to database - ALWAYS save, even if other operations fail
     let savedArticle: any = null;
     let articleSaveError: any = null;
-    
+
     try {
       const { data: articleData, error: insertError } = await supabase
         .from("articles")
@@ -179,7 +181,7 @@ export async function POST(request: NextRequest) {
           } as any)
           .select()
           .single();
-        
+
         savedArticle = fallbackArticle;
       } else {
         savedArticle = articleData;
@@ -258,7 +260,8 @@ export async function POST(request: NextRequest) {
           published_to: [],
         },
         saved: false,
-        error: articleSaveError?.message || "Failed to save article to database",
+        error:
+          articleSaveError?.message || "Failed to save article to database",
         metadata: {
           wordCount,
           readingTime,
@@ -311,7 +314,10 @@ export async function PUT(request: NextRequest) {
         start(controller) {
           controller.enqueue(
             encoder.encode(
-              `data: ${JSON.stringify({ type: "error", message: "Unauthorized" })}\n\n`
+              `data: ${JSON.stringify({
+                type: "error",
+                message: "Unauthorized",
+              })}\n\n`
             )
           );
           controller.close();
@@ -349,7 +355,10 @@ export async function PUT(request: NextRequest) {
         start(controller) {
           controller.enqueue(
             encoder.encode(
-              `data: ${JSON.stringify({ type: "error", message: "Outline not found" })}\n\n`
+              `data: ${JSON.stringify({
+                type: "error",
+                message: "Outline not found",
+              })}\n\n`
             )
           );
           controller.close();
@@ -362,9 +371,52 @@ export async function PUT(request: NextRequest) {
     }
 
     const outline = outlineData as any;
-    const { streamWriteHook, streamWriteSection, streamWriteConclusion } = await import(
-      "@/lib/ai/streaming-writer"
-    );
+    const { streamWriteHook, streamWriteSection, streamWriteConclusion } =
+      await import("@/lib/ai/streaming-writer");
+
+    // Create article placeholder first so we have an ID to navigate to
+    const slug = generateSlug(outline.structure.title);
+    const { data: placeholderArticleData, error: placeholderError } =
+      await supabase
+        .from("articles")
+        .insert({
+          outline_id: outlineId,
+          title: outline.structure.title,
+          slug,
+          content: "", // Empty initially, will be updated as we stream
+          content_html: "",
+          excerpt: "",
+          industry_id: outline.topics?.industry_id,
+          article_type: outline.article_type,
+          status: "draft",
+          word_count: 0,
+          reading_time: 0,
+          seo_keywords: outline.structure.seoKeywords || [],
+        } as any)
+        .select()
+        .single();
+
+    const placeholderArticle = placeholderArticleData as Article | null;
+
+    if (placeholderError || !placeholderArticle) {
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "error",
+                message: "Failed to create article placeholder",
+              })}\n\n`
+            )
+          );
+          controller.close();
+        },
+      });
+      return new Response(errorStream, {
+        status: 500,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
 
     // Create streaming response
     const stream = new ReadableStream({
@@ -373,6 +425,15 @@ export async function PUT(request: NextRequest) {
         let fullArticle = `# ${outline.structure.title}\n\n`;
 
         try {
+          // Send article ID first so client can navigate immediately
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "article_created",
+                articleId: placeholderArticle.id,
+              })}\n\n`
+            )
+          );
           // 1. Stream the hook/introduction
           controller.enqueue(
             encoder.encode(
@@ -386,6 +447,7 @@ export async function PUT(request: NextRequest) {
           );
 
           let hookContent = "";
+          let lastUpdateTime = Date.now();
           for await (const token of streamWriteHook(
             outline.structure.title,
             outline.structure.hook,
@@ -393,6 +455,17 @@ export async function PUT(request: NextRequest) {
             outline.tone
           )) {
             hookContent += token;
+            fullArticle = `# ${outline.structure.title}\n\n${hookContent}\n\n`;
+
+            // Update article in database every 500ms to show progress
+            const now = Date.now();
+            if (now - lastUpdateTime > 500) {
+              await(supabase.from("articles") as any)
+                .update({ content: fullArticle })
+                .eq("id", placeholderArticle.id);
+              lastUpdateTime = now;
+            }
+
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
@@ -404,7 +477,7 @@ export async function PUT(request: NextRequest) {
             );
           }
 
-          fullArticle += hookContent + "\n\n";
+          fullArticle = `# ${outline.structure.title}\n\n${hookContent}\n\n`;
 
           // 2. Stream each section
           const totalSections = outline.structure.sections.length;
@@ -440,6 +513,22 @@ export async function PUT(request: NextRequest) {
 
             for await (const token of sectionGenerator) {
               sectionContent += token;
+
+              // Rebuild full article with current progress (including this section in progress)
+              const currentSections = [...sections, sectionContent];
+              const currentFullArticle = `# ${
+                outline.structure.title
+              }\n\n${hookContent}\n\n${currentSections.join("\n\n")}\n\n`;
+
+              // Update article in database every 500ms to show progress
+              const now = Date.now();
+              if (now - lastUpdateTime > 500) {
+                await(supabase.from("articles") as any)
+                  .update({ content: currentFullArticle })
+                  .eq("id", placeholderArticle.id);
+                lastUpdateTime = now;
+              }
+
               controller.enqueue(
                 encoder.encode(
                   `data: ${JSON.stringify({
@@ -453,7 +542,15 @@ export async function PUT(request: NextRequest) {
             }
 
             sections.push(sectionContent);
-            fullArticle += sectionContent + "\n\n";
+            fullArticle = `# ${
+              outline.structure.title
+            }\n\n${hookContent}\n\n${sections.join("\n\n")}\n\n`;
+
+            // Update after each section completes
+            await(supabase.from("articles") as any)
+              .update({ content: fullArticle })
+              .eq("id", placeholderArticle.id);
+            lastUpdateTime = Date.now();
           }
 
           // 3. Stream the conclusion
@@ -481,6 +578,17 @@ export async function PUT(request: NextRequest) {
             fullArticle
           )) {
             conclusionContent += token;
+            const currentFullArticle = `${fullArticle}${conclusionContent}`;
+
+            // Update article in database every 500ms to show progress
+            const now = Date.now();
+            if (now - lastUpdateTime > 500) {
+              await(supabase.from("articles") as any)
+                .update({ content: currentFullArticle })
+                .eq("id", placeholderArticle.id);
+              lastUpdateTime = now;
+            }
+
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
@@ -494,7 +602,7 @@ export async function PUT(request: NextRequest) {
 
           fullArticle += conclusionContent;
 
-          // 4. Save article to database
+          // 4. Update article with final content
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
@@ -506,38 +614,33 @@ export async function PUT(request: NextRequest) {
             )
           );
 
-          const slug = generateSlug(outline.structure.title);
           const wordCount = countWords(fullArticle);
           const readingTime = Math.ceil(wordCount / 200);
           const contentHtml = await convertToHtml(fullArticle);
           const excerpt = generateExcerpt(fullArticle, 160);
 
-          const { data: savedArticle, error: saveError } = await supabase
-            .from("articles")
-            .insert({
-              outline_id: outlineId,
-              title: outline.structure.title,
-              slug,
+          // Update the placeholder article with final content
+          const { data: savedArticle, error: saveError } = await(
+            supabase.from("articles") as any
+          )
+            .update({
               content: fullArticle,
               content_html: contentHtml,
               excerpt,
-              industry_id: outline.topics?.industry_id,
-              article_type: outline.article_type,
-              status: "draft",
               word_count: wordCount,
               reading_time: readingTime,
-              seo_keywords: outline.structure.seoKeywords || [],
-            } as any)
+            })
+            .eq("id", placeholderArticle.id)
             .select()
             .single();
 
           if (saveError) {
-            console.error("Error saving article:", saveError);
+            console.error("Error updating article:", saveError);
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
                   type: "warning",
-                  message: "Article generated but failed to save to database",
+                  message: "Article generated but failed to update in database",
                 })}\n\n`
               )
             );
@@ -580,7 +683,8 @@ export async function PUT(request: NextRequest) {
             encoder.encode(
               `data: ${JSON.stringify({
                 type: "error",
-                message: error instanceof Error ? error.message : "Unknown error",
+                message:
+                  error instanceof Error ? error.message : "Unknown error",
               })}\n\n`
             )
           );

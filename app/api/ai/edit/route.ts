@@ -165,9 +165,9 @@ Ensure your edit flows naturally with this context.`;
       async start(controller) {
         try {
           const response = await openai.chat.completions.create({
-            model: process.env.OPENAI_MODEL || "gpt-5.1",
-            max_tokens: 2048,
+            model: process.env.OPENAI_MODEL || "gpt-5.2",
             stream: true,
+            reasoning_effort: "medium",
             messages: [
               {
                 role: "system",
@@ -268,8 +268,8 @@ export async function PUT(request: NextRequest) {
     }
 
     const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-5.1",
-      max_tokens: 2048,
+      model: process.env.OPENAI_MODEL || "gpt-5.2",
+      reasoning_effort: "medium",
       messages: [
         {
           role: "system",
@@ -368,8 +368,8 @@ export async function PATCH(request: NextRequest) {
 
         try {
           const response = await openai.chat.completions.create({
-            model: process.env.OPENAI_MODEL || "gpt-5.1",
-            max_tokens: 1024,
+            model: process.env.OPENAI_MODEL || "gpt-5.2",
+            reasoning_effort: "medium",
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt }

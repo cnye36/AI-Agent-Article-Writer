@@ -13,7 +13,9 @@ interface OutlineStageProps {
 }
 
 export function OutlineStage({ outline, isLoading, onApprove, onBack, onSelectDifferentTopic, onOutlineUpdate }: OutlineStageProps) {
-  const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
+  const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(
+    null
+  );
   const [editPrompt, setEditPrompt] = useState("");
   const [isRewriting, setIsRewriting] = useState(false);
   const [localOutline, setLocalOutline] = useState<Outline | null>(outline);
@@ -23,7 +25,40 @@ export function OutlineStage({ outline, isLoading, onApprove, onBack, onSelectDi
     setLocalOutline(outline);
   }, [outline]);
 
-  if (isLoading) {
+  // Poll for outline updates if it's being generated
+  useEffect(() => {
+    if (!outline?.id || !isLoading) return;
+
+    // Check if outline is still being generated
+    const isGenerating =
+      outline.structure?.title === "Generating..." ||
+      !outline.structure?.sections ||
+      outline.structure.sections.length === 0 ||
+      !outline.structure.conclusion?.summary;
+
+    if (!isGenerating) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/agents/outline?id=${outline.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.outline) {
+            setLocalOutline(data.outline);
+            if (onOutlineUpdate) {
+              onOutlineUpdate(data.outline);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error polling outline:", error);
+      }
+    }, 1000); // Poll every second
+
+    return () => clearInterval(interval);
+  }, [outline?.id, isLoading, onOutlineUpdate]);
+
+  if (isLoading && !localOutline) {
     return (
       <div className="text-center py-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -48,6 +83,13 @@ export function OutlineStage({ outline, isLoading, onApprove, onBack, onSelectDi
 
   const { structure } = localOutline;
 
+  // Check if outline is still being generated
+  const isGenerating =
+    structure?.title === "Generating..." ||
+    !structure?.sections ||
+    structure.sections.length === 0 ||
+    !structure.conclusion?.summary;
+
   const handleSectionEdit = async (sectionIndex: number) => {
     if (!editPrompt.trim() || !localOutline) return;
 
@@ -69,7 +111,7 @@ export function OutlineStage({ outline, isLoading, onApprove, onBack, onSelectDi
       }
 
       const data = await response.json();
-      
+
       // Update local outline
       const updatedStructure = {
         ...structure,
@@ -111,28 +153,69 @@ export function OutlineStage({ outline, isLoading, onApprove, onBack, onSelectDi
         </button>
       </div>
 
+      {/* Show generating indicator */}
+      {isGenerating && (
+        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+          <div className="flex items-center gap-3">
+            <div className="animate-pulse">✍️</div>
+            <div className="flex-1">
+              <p className="text-blue-400 font-medium">Generating outline...</p>
+              <p className="text-xs text-zinc-500 mt-1">
+                Sections will appear as they&apos;re created
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/50">
-        <h3 className="text-2xl font-bold mb-4">{structure.title}</h3>
-        <p className="text-zinc-300 mb-6">{structure.hook}</p>
+        <h3 className="text-2xl font-bold mb-4">
+          {structure.title === "Generating..." ? (
+            <div className="h-8 bg-zinc-800 rounded animate-pulse" />
+          ) : (
+            structure.title
+          )}
+        </h3>
+        <div className="text-zinc-300 mb-6">
+          {!structure.hook || structure.hook === "" ? (
+            <div className="space-y-2">
+              <div className="h-4 bg-zinc-800 rounded animate-pulse" />
+              <div className="h-4 bg-zinc-800 rounded animate-pulse w-3/4" />
+            </div>
+          ) : (
+            structure.hook
+          )}
+        </div>
 
         <div className="space-y-6">
-          {structure.sections.map((section, index) => (
-            <div
-              key={index}
-              className="border-l-2 border-blue-500 pl-4 relative group"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <h4 className="font-semibold text-lg mb-2">{section.heading}</h4>
-                  <ul className="list-disc list-inside space-y-1 text-zinc-400 mb-2">
-                    {section.keyPoints.map((point, i) => (
-                      <li key={i} className="text-sm">{point}</li>
-                    ))}
-                  </ul>
-                  <p className="text-xs text-zinc-500">Target: ~{section.wordTarget} words</p>
-                </div>
+          {structure.sections && structure.sections.length > 0 ? (
+            structure.sections.map((section, index) => (
+              <div
+                key={index}
+                className="border-l-2 border-blue-500 pl-4 relative group"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-lg mb-2">
+                      {section.heading}
+                    </h4>
+                    <ul className="list-disc list-inside space-y-1 text-zinc-400 mb-2">
+                      {section.keyPoints.map((point, i) => (
+                        <li key={i} className="text-sm">
+                          {point}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-xs text-zinc-500">
+                      Target: ~{section.wordTarget} words
+                    </p>
+                  </div>
                 <button
-                  onClick={() => setEditingSectionIndex(editingSectionIndex === index ? null : index)}
+                  onClick={() =>
+                    setEditingSectionIndex(
+                      editingSectionIndex === index ? null : index
+                    )
+                  }
                   className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white"
                   title="Edit this section"
                 >
@@ -175,13 +258,39 @@ export function OutlineStage({ outline, isLoading, onApprove, onBack, onSelectDi
                 </div>
               )}
             </div>
-          ))}
+            ))
+          ) : (
+            // Skeleton loaders for sections while generating
+            <div className="space-y-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="border-l-2 border-zinc-700 pl-4">
+                  <div className="space-y-3 animate-pulse">
+                    <div className="h-6 bg-zinc-800 rounded w-1/3" />
+                    <div className="h-4 bg-zinc-800 rounded w-full" />
+                    <div className="h-4 bg-zinc-800 rounded w-5/6" />
+                    <div className="h-3 bg-zinc-800 rounded w-1/4" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-6 pt-6 border-t border-zinc-800">
           <h4 className="font-semibold mb-2">Conclusion</h4>
-          <p className="text-zinc-300 mb-2">{structure.conclusion.summary}</p>
-          <p className="text-zinc-400 text-sm">{structure.conclusion.callToAction}</p>
+          {!structure.conclusion?.summary || structure.conclusion.summary === "" ? (
+            <div className="space-y-2 animate-pulse">
+              <div className="h-4 bg-zinc-800 rounded w-full" />
+              <div className="h-4 bg-zinc-800 rounded w-4/5" />
+            </div>
+          ) : (
+            <>
+              <p className="text-zinc-300 mb-2">{structure.conclusion.summary}</p>
+              <p className="text-zinc-400 text-sm">
+                {structure.conclusion.callToAction}
+              </p>
+            </>
+          )}
         </div>
 
         {structure.seoKeywords && structure.seoKeywords.length > 0 && (

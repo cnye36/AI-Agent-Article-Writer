@@ -155,8 +155,7 @@ Important:
       sections: updatedSections,
     };
 
-    const { error: updateError } = await supabase
-      .from("outlines")
+    const { error: updateError } = await(supabase.from("outlines") as any)
       .update({ structure: updatedStructure })
       .eq("id", outlineId);
 

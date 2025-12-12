@@ -88,20 +88,28 @@ export function createResearchAgent() {
           try {
             // Use OpenAI API with search tool enabled
             // GPT-5.1 and o1/o3 models support web search
-            const hasWebAccess = searchModel.includes('o1') || searchModel.includes('o3') || searchModel.includes('5.1');
-            
-            // For GPT-5.1 and o1/o3 models, web search is built-in
+            const hasWebAccess =
+              searchModel.includes("o1") ||
+              searchModel.includes("o3") ||
+              searchModel.includes("5.1");
+            searchModel.includes("5.2");
+
+            // For GPT-5.1, 5.2 and o1/o3 models, web search is built-in
             // For other models, we'll rely on their knowledge and prompt engineering
             const response = await openai.chat.completions.create({
               model: searchModel,
               messages: [
                 {
                   role: "system",
-                  content: `You are a research assistant. ${hasWebAccess ? 'You have access to real-time web search - use it to find current information, news, and trends. Always cite your sources with URLs.' : 'Provide information based on your knowledge and include relevant URLs when possible.'} Always include source URLs, titles, and summaries when providing information.`
+                  content: `You are a research assistant. ${
+                    hasWebAccess
+                      ? "You have access to real-time web search - use it to find current information, news, and trends. Always cite your sources with URLs."
+                      : "Provide information based on your knowledge and include relevant URLs when possible."
+                  } Always include source URLs, titles, and summaries when providing information.`,
                 },
-                { role: "user", content: prompt }
+                { role: "user", content: prompt },
               ],
-              temperature: 0.3,
+              reasoning_effort: "medium",
             });
 
             const content = response.choices[0]?.message?.content || "";
@@ -131,8 +139,12 @@ export function createResearchAgent() {
         { role: "system", content: prompt },
         {
           role: "user",
-          content: `Based on these sources, identify 5-10 newsworthy topics. Return ONLY valid JSON array:\n\n${JSON.stringify(state.sources.slice(0, 20), null, 2)}`
-        }
+          content: `Based on these sources, identify 5-6 newsworthy topics. Return ONLY valid JSON array:\n\n${JSON.stringify(
+            state.sources.slice(0, 20),
+            null,
+            2
+          )}`,
+        },
       ]);
 
       const content = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);

@@ -29,6 +29,7 @@ export default function ArticlePage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"edit" | "preview" | "settings">("edit");
   const [isSaving, setIsSaving] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Fetch article data
   const fetchArticle = useCallback(async () => {
@@ -46,6 +47,19 @@ export default function ArticlePage() {
       setArticle(data.article);
       setVersions(data.versions || []);
       setLinks(data.links || { outgoing: [], incoming: [] });
+
+      // Check if article is being generated
+      // Only consider it generating if word_count is not set (only set at final save)
+      // This is the most reliable indicator
+      const hasNoWordCount =
+        !data.article.word_count || data.article.word_count === 0;
+      const isVeryRecent =
+        new Date(data.article.created_at).getTime() >
+        Date.now() - 5 * 60 * 1000; // Created within last 5 minutes
+
+      // Only set generating if word_count is missing AND it's recent
+      // This prevents infinite loops - once word_count is set, we stop
+      setIsGenerating(hasNoWordCount && isVeryRecent);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load article");
     } finally {
@@ -59,57 +73,81 @@ export default function ArticlePage() {
     }
   }, [articleId, fetchArticle]);
 
-  // Save article content
-  const handleSave = useCallback(async (content: string) => {
-    if (!article) return;
-
-    setIsSaving(true);
-
-    try {
-      const response = await fetch("/api/articles", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: article.id,
-          content,
-          saveVersion: true,
-          editedBy: "user",
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setArticle(data.article);
-      }
-    } catch (err) {
-      console.error("Failed to save:", err);
-    } finally {
-      setIsSaving(false);
+  // NO STREAMING OR POLLING ON ARTICLE PAGE
+  // The stream should complete in create-article-flow before navigation
+  // If we're here and article is incomplete, it means something went wrong
+  // Just fetch once to get final state, then stop
+  useEffect(() => {
+    if (isGenerating && articleId) {
+      // Only fetch once after a delay to allow final save to complete
+      const timeout = setTimeout(() => {
+        fetchArticle();
+        // After fetching, if still incomplete, stop trying (prevent infinite loop)
+        setTimeout(() => {
+          setIsGenerating(false);
+        }, 2000);
+      }, 2000);
+      return () => clearTimeout(timeout);
     }
-  }, [article]);
+  }, [isGenerating, articleId, fetchArticle]);
+
+  // Save article content
+  const handleSave = useCallback(
+    async (content: string) => {
+      if (!article) return;
+
+      setIsSaving(true);
+
+      try {
+        const response = await fetch("/api/articles", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: article.id,
+            content,
+            saveVersion: true,
+            editedBy: "user",
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setArticle(data.article);
+        }
+      } catch (err) {
+        console.error("Failed to save:", err);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [article]
+  );
 
   // Update article metadata
-  const handleUpdateMetadata = useCallback(async (updates: Partial<Article>) => {
-    if (!article) return;
+  const handleUpdateMetadata = useCallback(
+    async (updates: Partial<Article>) => {
+      if (!article) return;
 
-    try {
-      const response = await fetch("/api/articles", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: article.id,
-          ...updates,
-        }),
-      });
+      try {
+        const response = await fetch("/api/articles", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: article.id,
+            ...updates,
+          }),
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        setArticle(data.article);
+        if (response.ok) {
+          const data = await response.json();
+          setArticle(data.article);
+        }
+      } catch (err) {
+        console.error("Failed to update:", err);
       }
-    } catch (err) {
-      console.error("Failed to update:", err);
-    }
-  }, [article]);
+    },
+    [article]
+  );
 
   // Publish article
   const handlePublish = useCallback(async () => {
@@ -135,15 +173,16 @@ export default function ArticlePage() {
   }, [article, router]);
 
   // Export article
-  const handleExport = useCallback((format: "md" | "html" | "txt") => {
-    if (!article) return;
+  const handleExport = useCallback(
+    (format: "md" | "html" | "txt") => {
+      if (!article) return;
 
-    let content = article.content;
-    let mimeType = "text/plain";
-    const extension = format;
+      let content = article.content;
+      let mimeType = "text/plain";
+      const extension = format;
 
-    if (format === "html" && article.content_html) {
-      content = `<!DOCTYPE html>
+      if (format === "html" && article.content_html) {
+        content = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -162,17 +201,42 @@ export default function ArticlePage() {
   ${article.content_html}
 </body>
 </html>`;
-      mimeType = "text/html";
-    }
+        mimeType = "text/html";
+      }
 
-    downloadAsFile(content, `${article.slug}.${extension}`, mimeType);
-  }, [article]);
+      downloadAsFile(content, `${article.slug}.${extension}`, mimeType);
+    },
+    [article]
+  );
 
   // Loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500" />
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500 mx-auto mb-4" />
+          <p className="text-zinc-400">Loading article...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Generating state (article is being written)
+  if (isGenerating && article) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Writing Your Article</h2>
+          <p className="text-zinc-400 mb-4">
+            Your article is being generated. This page will update automatically
+            as content is written...
+          </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-zinc-500">
+            <div className="animate-pulse">●</div>
+            <span>Streaming content in real-time</span>
+          </div>
+        </div>
       </div>
     );
   }

@@ -107,75 +107,159 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
     }
   }, []);
 
-  const selectTopic = useCallback(async (topic: Topic) => {
-    if (!topic || !topic.id) {
-      setError("Invalid topic selected. Please try again.");
-      console.error("Topic selection error: topic or topic.id is missing", topic);
-      return;
-    }
-
-    // Check if topic has a temporary ID (from failed database save)
-    if (topic.id.startsWith("temp-")) {
-      setError("This topic could not be saved to the database. Please try finding topics again.");
-      console.error("Topic has temporary ID, cannot proceed:", topic);
-      return;
-    }
-
-    setSelectedTopic(topic);
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Generate outline immediately after selection
-      const response = await fetch("/api/agents/outline", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topicId: topic.id,
-          articleType: config.articleType,
-          targetLength: config.targetLength,
-          tone: config.tone,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: "Unknown error" }));
-        const errorMessage = data.error || data.details || `Failed to generate outline (${response.status})`;
-        throw new Error(errorMessage);
+  const selectTopic = useCallback(
+    async (topic: Topic) => {
+      if (!topic || !topic.id) {
+        setError("Invalid topic selected. Please try again.");
+        console.error(
+          "Topic selection error: topic or topic.id is missing",
+          topic
+        );
+        return;
       }
 
-      const data = await response.json();
-      if (!data.outline) {
-        throw new Error("No outline returned from server");
+      // Check if topic has a temporary ID (from failed database save)
+      if (topic.id.startsWith("temp-")) {
+        setError(
+          "This topic could not be saved to the database. Please try finding topics again."
+        );
+        console.error("Topic has temporary ID, cannot proceed:", topic);
+        return;
       }
-      
-      setOutline(data.outline);
-      setStage("outline");
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "An error occurred";
-      setError(errorMessage);
-      console.error("Error selecting topic:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [config]);
 
-  const rejectTopic = useCallback(async (topicId: string) => {
-    try {
-      // Use type assertion to work around Supabase type inference issue
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const topicsTable = supabase.from("topics") as any;
-      const { error } = await topicsTable
-        .update({ status: "rejected" })
-        .eq("id", topicId);
+      setSelectedTopic(topic);
+      setIsLoading(true);
+      setError(null);
 
-      if (!error) {
-        setTopics((prev) => prev.filter((t) => t.id !== topicId));
+      try {
+        // Use streaming endpoint for outline generation
+        const response = await fetch("/api/agents/outline", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topicId: topic.id,
+            articleType: config.articleType,
+            targetLength: config.targetLength,
+            tone: config.tone,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to generate outline (${response.status})`);
+        }
+
+        if (!response.body) {
+          throw new Error("No response body");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let outlineId: string | null = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6);
+              try {
+                const event = JSON.parse(data);
+
+                if (event.type === "outline_created" && event.outlineId) {
+                  outlineId = event.outlineId;
+                  // Fetch the initial outline placeholder
+                  const outlineResponse = await fetch(
+                    `/api/agents/outline?id=${outlineId}`
+                  );
+                  if (outlineResponse.ok) {
+                    const outlineData = await outlineResponse.json();
+                    if (outlineData.outline) {
+                      setOutline(outlineData.outline);
+                      setStage("outline");
+                      // Stop loading spinner - streaming UI will take over
+                      setIsLoading(false);
+                    }
+                  }
+                } else if (
+                  event.type === "progress" &&
+                  event.outline &&
+                  outlineId
+                ) {
+                  // Update outline structure as progress comes in
+                  setOutline((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          structure: event.outline,
+                        }
+                      : null
+                  );
+                } else if (event.type === "complete" && event.outline) {
+                  setOutline(event.outline);
+                  setIsLoading(false);
+                  setStage("outline");
+                  return;
+                } else if (event.type === "error") {
+                  throw new Error(
+                    event.message || "Failed to generate outline"
+                  );
+                }
+              } catch (parseError) {
+                console.error("Error parsing SSE data:", parseError);
+              }
+            }
+          }
+        }
+
+        // If we have an outlineId, ensure we have the outline
+        if (outlineId) {
+          const outlineResponse = await fetch(
+            `/api/agents/outline?id=${outlineId}`
+          );
+          if (outlineResponse.ok) {
+            const outlineData = await outlineResponse.json();
+            if (outlineData.outline) {
+              setOutline(outlineData.outline);
+              setStage("outline");
+            }
+          }
+        }
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "An error occurred";
+        setError(errorMessage);
+        console.error("Error selecting topic:", err);
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error("Failed to reject topic:", err);
-    }
-  }, [supabase]);
+    },
+    [config]
+  );
+
+  const rejectTopic = useCallback(
+    async (topicId: string) => {
+      try {
+        // Use type assertion to work around Supabase type inference issue
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const topicsTable = supabase.from("topics") as any;
+        const { error } = await topicsTable
+          .update({ status: "rejected" })
+          .eq("id", topicId);
+
+        if (!error) {
+          setTopics((prev) => prev.filter((t) => t.id !== topicId));
+        }
+      } catch (err) {
+        console.error("Failed to reject topic:", err);
+      }
+    },
+    [supabase]
+  );
 
   const generateOutline = useCallback(async () => {
     if (!selectedTopic) {
@@ -187,8 +271,9 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
     setError(null);
 
     try {
+      // Use streaming PUT endpoint for better UX
       const response = await fetch("/api/agents/outline", {
-        method: "POST",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topicId: selectedTopic.id,
@@ -199,13 +284,84 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to generate outline");
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to generate outline");
       }
 
-      const data = await response.json();
-      setOutline(data.outline);
-      setStage("outline");
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let outlineId: string | null = null;
+      let latestOutline: OutlineStructure | null = null;
+
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.type === "outline_created") {
+                outlineId = data.outlineId;
+              } else if (data.type === "progress") {
+                // Update progress - could show in UI if needed
+                if (data.outline) {
+                  latestOutline = data.outline;
+                }
+              } else if (data.type === "complete") {
+                if (data.outline) {
+                  latestOutline = data.outline;
+                }
+              } else if (data.type === "error") {
+                throw new Error(data.message || "Outline generation failed");
+              }
+            } catch (parseError) {
+              console.error("Error parsing SSE data:", parseError);
+            }
+          }
+        }
+      }
+
+      // Fetch final outline if we have an ID
+      if (outlineId) {
+        const outlineResponse = await fetch(
+          `/api/agents/outline?id=${outlineId}`
+        );
+        if (outlineResponse.ok) {
+          const outlineData = await outlineResponse.json();
+          if (outlineData.outline) {
+            setOutline(outlineData.outline);
+            setStage("outline");
+          }
+        }
+      } else if (latestOutline && outlineId) {
+        // Create Outline object from structure
+        const outline: Outline = {
+          id: outlineId,
+          structure: latestOutline,
+          topic_id: selectedTopic.id,
+          article_type: config.articleType,
+          target_length: config.targetLength,
+          tone: config.tone,
+          approved: false,
+          created_at: new Date().toISOString(),
+        };
+        setOutline(outline);
+        setStage("outline");
+      } else {
+        throw new Error("No outline received");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -315,29 +471,22 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
   }, []);
 
   const goToStage = useCallback((newStage: GenerationStage) => {
-    // Allow navigation to any previous stage or current stage
-    const stageOrder: GenerationStage[] = ["config", "topics", "outline", "content"];
-    const currentIndex = stageOrder.indexOf(stage);
-    const newIndex = stageOrder.indexOf(newStage);
+    // Allow navigation to any stage
+    setStage(newStage);
+    setError(null);
 
-    // Allow going back or staying at same stage
-    if (newIndex <= currentIndex) {
-      setStage(newStage);
-      setError(null);
-      
-      // If going back to topics, allow selecting a different topic
-      if (newStage === "topics") {
-        setSelectedTopic(null);
-        setOutline(null);
-        setArticle(null);
-      }
-      
-      // If going back to outline, allow selecting a different topic
-      if (newStage === "outline") {
-        setArticle(null);
-      }
+    // If going back to topics, clear downstream state
+    if (newStage === "topics") {
+      setSelectedTopic(null);
+      setOutline(null);
+      setArticle(null);
     }
-  }, [stage]);
+
+    // If going back to outline, clear article
+    if (newStage === "outline") {
+      setArticle(null);
+    }
+  }, []);
   
   // Allow selecting a different topic
   const selectDifferentTopic = useCallback(() => {
