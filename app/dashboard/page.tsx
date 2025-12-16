@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { TopicFeed } from "@/components/topic-feed";
 import { ArticleLibrary } from "@/components/article-library";
 import { CreateArticleFlow } from "@/components/create-article-flow";
@@ -11,12 +11,36 @@ import type { Topic } from "@/types";
 
 export default function Dashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading, signOut } = useAuth();
+  // Initialize activeTab from URL parameter
+  const getInitialTab = (): "create" | "topics" | "library" => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam && ["create", "topics", "library"].includes(tabParam)) {
+      return tabParam as "create" | "topics" | "library";
+    }
+    return "create";
+  };
+
   const [activeTab, setActiveTab] = useState<"create" | "topics" | "library">(
-    "create"
+    getInitialTab()
   );
   const [selectedTopicFromFeed, setSelectedTopicFromFeed] =
     useState<Topic | null>(null);
+
+  // Handle tab query parameter changes
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam && ["create", "topics", "library"].includes(tabParam)) {
+      setActiveTab(tabParam as "create" | "topics" | "library");
+    }
+  }, [searchParams]);
+
+  // Update URL when tab changes
+  const handleTabChange = (tab: "create" | "topics" | "library") => {
+    setActiveTab(tab);
+    router.push(`/dashboard?tab=${tab}`);
+  };
 
   const handleTopicSelect = (topic: Topic) => {
     setSelectedTopicFromFeed(topic);
@@ -53,7 +77,7 @@ export default function Dashboard() {
                 <button
                   key={tab}
                   onClick={() =>
-                    setActiveTab(tab as "create" | "topics" | "library")
+                    handleTabChange(tab as "create" | "topics" | "library")
                   }
                   className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                     activeTab === tab

@@ -110,6 +110,29 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
     }
   }, [supabase]);
 
+  // Delete topic
+  const deleteTopic = useCallback(async (topicId: string) => {
+    if (!confirm("Are you sure you want to permanently delete this topic?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/agents/research?id=${topicId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setTopics((prev) => prev.filter((t) => t.id !== topicId));
+      } else {
+        const data = await response.json();
+        alert(data.error || "Failed to delete topic");
+      }
+    } catch (error) {
+      console.error("Error deleting topic:", error);
+      alert("Failed to delete topic");
+    }
+  }, []);
+
   // Initial fetch
   useEffect(() => {
     fetchIndustries();
@@ -211,6 +234,7 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
               topic={topic}
               onSelect={onSelectTopic}
               onUpdateStatus={updateTopicStatus}
+              onDelete={deleteTopic}
             />
           ))}
         </div>
@@ -224,9 +248,10 @@ interface TopicCardProps {
   topic: Topic;
   onSelect?: (topic: Topic) => void;
   onUpdateStatus: (topicId: string, status: string) => void;
+  onDelete: (topicId: string) => void;
 }
 
-function TopicCard({ topic, onSelect, onUpdateStatus }: TopicCardProps) {
+function TopicCard({ topic, onSelect, onUpdateStatus, onDelete }: TopicCardProps) {
   const [showSources, setShowSources] = useState(false);
   const statusConfig = getStatusConfig(topic.status);
 
@@ -335,6 +360,13 @@ function TopicCard({ topic, onSelect, onUpdateStatus }: TopicCardProps) {
             >
               ✕
             </button>
+            <button
+              onClick={() => onDelete(topic.id)}
+              className="px-3 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm transition-colors"
+              title="Delete permanently"
+            >
+              🗑️
+            </button>
           </>
         )}
         {topic.status === "approved" && (
@@ -347,17 +379,35 @@ function TopicCard({ topic, onSelect, onUpdateStatus }: TopicCardProps) {
           </button>
         )}
         {topic.status === "rejected" && (
-          <button
-            onClick={() => onUpdateStatus(topic.id, "pending")}
-            className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
-          >
-            Restore
-          </button>
+          <>
+            <button
+              onClick={() => onUpdateStatus(topic.id, "pending")}
+              className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+            >
+              Restore
+            </button>
+            <button
+              onClick={() => onDelete(topic.id)}
+              className="px-3 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm transition-colors"
+              title="Delete permanently"
+            >
+              🗑️
+            </button>
+          </>
         )}
         {topic.status === "used" && (
-          <span className="flex-1 py-2 text-center text-sm text-zinc-500">
-            Already used
-          </span>
+          <>
+            <span className="flex-1 py-2 text-center text-sm text-zinc-500">
+              Already used
+            </span>
+            <button
+              onClick={() => onDelete(topic.id)}
+              className="px-3 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm transition-colors"
+              title="Delete permanently"
+            >
+              🗑️
+            </button>
+          </>
         )}
       </div>
     </div>

@@ -208,6 +208,8 @@ export function getArticleTypeLabel(type: string): string {
     news: "News Analysis",
     opinion: "Opinion Piece",
     tutorial: "Tutorial",
+    listicle: "Listicle",
+    affiliate: "Affiliate Piece",
   };
   return labels[type] || capitalize(type);
 }

@@ -269,11 +269,21 @@ export function ArticleLibrary({ onEditArticle }: ArticleLibraryProps) {
         {/* Type Filter */}
         <select
           value={selectedType || ""}
-          onChange={(e) => setSelectedType((e.target.value || null) as ArticleType | null)}
+          onChange={(e) =>
+            setSelectedType((e.target.value || null) as ArticleType | null)
+          }
           className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
           <option value="">All Types</option>
-          {["blog", "technical", "news", "opinion", "tutorial"].map((type) => (
+          {[
+            "blog",
+            "technical",
+            "news",
+            "opinion",
+            "tutorial",
+            "listicle",
+            "affiliate",
+          ].map((type) => (
             <option key={type} value={type}>
               {getArticleTypeLabel(type)}
             </option>
@@ -283,7 +293,9 @@ export function ArticleLibrary({ onEditArticle }: ArticleLibraryProps) {
         {/* Status Filter */}
         <select
           value={selectedStatus || ""}
-          onChange={(e) => setSelectedStatus((e.target.value || null) as ArticleStatus | null)}
+          onChange={(e) =>
+            setSelectedStatus((e.target.value || null) as ArticleStatus | null)
+          }
           className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
           <option value="">All Status</option>

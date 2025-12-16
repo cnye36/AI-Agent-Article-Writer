@@ -4,11 +4,13 @@ import { StateGraph, Annotation } from "@langchain/langgraph";
 import { openai } from "@/lib/ai/openai";
 import { generateEmbedding } from "@/lib/ai/embeddings";
 import type { Source } from "@/types";
+import { tavilySearchSources } from "@/lib/search/tavily";
 
 interface TopicCandidate {
   title: string;
   summary: string;
   angle: string; // unique perspective
+  hook: string; // Compelling opening hook for the article
   sources: Source[];
   relevanceScore: number;
   embedding?: number[]; // Vector embedding for semantic similarity
@@ -18,22 +20,64 @@ interface TopicCandidate {
 const ResearchState = Annotation.Root({
   industry: Annotation<string | undefined>,
   keywords: Annotation<string[]>,
+  articleType: Annotation<string | undefined>, // blog, listicle, technical, etc.
   existingTopics: Annotation<string[]>, // titles of existing articles
   discoveredTopics: Annotation<TopicCandidate[]>,
   sources: Annotation<Source[]>,
 });
 
+const getArticleTypeGuidelines = (articleType?: string): string => {
+  const currentDate = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const baseGuidelines = `**CURRENT DATE: ${currentDate}** - Focus on:
+- Recent developments and news.
+- Emerging trends and forward-looking predictions.
+- Topics that cover what is current and what is coming next.
+- Current topics that are relevant now.`;
+
+  if (!articleType) {
+    return `${baseGuidelines}\n\nGenerate compelling, SEO-optimized titles that are engaging and search-friendly.`;
+  }
+
+  const typeGuidelines: Record<string, string> = {
+    blog: "Title format: Engaging, conversational, often question-based or benefit-focused. Use forward-looking language when appropriate. Examples: 'Why [Topic] Is Changing Everything' or 'The Hidden Truth About [Topic] That Nobody Talks About' or '[Topic] Trends to Watch'",
+    listicle:
+      "Title format: MUST start with a number followed by the topic. Use forward-looking language. Examples: '11 AI Tools Every Developer Needs', '7 [Topic] Trends to Watch', '15 [Topic] Predictions', '10 Ways [Topic] Will Transform Business'. The title should clearly indicate it's a numbered list.",
+    technical:
+      "Title format: Specific, technical, often includes technology names or methodologies. Can include forward-looking language. Examples: 'Building [System] with [Technology]: A Complete Guide', '[Technology] Deep Dive: What's New', '[Technology] Deep Dive: Understanding [Concept]'",
+    news: "Title format: Timely, factual, often includes dates or 'latest' language. Focus on recent news. Examples: '[Company] Announces [News] in Major Industry Shift', 'Breaking: [Topic] Reaches New Milestone', 'Latest [Topic] Developments: What to Expect'",
+    opinion:
+      "Title format: Provocative, takes a stance, often uses 'why' or 'how'. Can include predictions. Examples: 'Why [Topic] Is Overhyped (And What Actually Matters)', 'The Real Problem With [Topic] Nobody Wants to Admit', 'What [Topic] Will Look Like in the Future'",
+    tutorial:
+      "Title format: Action-oriented, includes 'how to' or step-by-step language. Examples: 'How to [Achieve Goal]: A Step-by-Step Guide', 'Complete Guide: [Task] from Start to Finish', 'Mastering [Topic]'",
+    affiliate:
+      "Title format: Comparison or recommendation focused. Can include recommendations. Examples: '[Product A] vs [Product B]: Which Is Better?', 'The Best [Category] Tools: Our Top 5 Picks', 'Top [Category] Solutions'",
+  };
+
+  return `${baseGuidelines}\n\n**Article Type: ${articleType}**\n${
+    typeGuidelines[articleType] || typeGuidelines.blog
+  }\n\nGenerate titles that strictly follow this format and are optimized for SEO.`;
+};
+
 const researchAgentPrompt = `You are a research agent specialized in discovering trending and newsworthy topics.
 
 Your responsibilities:
-1. Search for the latest news, trends, and developments based on the provided search criteria
+1. Search for the LATEST news, trends, and developments.
 2. Identify unique angles that haven't been covered
 3. Avoid topics that overlap with existing articles (provided below)
 4. Score topics by relevance, timeliness, and audience interest
 5. Gather credible sources for each topic
+6. Generate SEO-optimized titles that match the specified article type format
+7. Create compelling hooks that grab attention and set up the article
+8. Use forward-looking language such as "trends", "predictions" or "future outlook" when appropriate
 
 {industrySection}
 Search Keywords: {keywords}
+{articleTypeGuidelines}
 
 Existing Articles to Avoid Overlap:
 {existingTopics}
@@ -41,9 +85,10 @@ Existing Articles to Avoid Overlap:
 For each topic, provide a JSON array with this structure:
 [
   {
-    "title": "Compelling topic title",
-    "summary": "2-3 sentence summary",
-    "angle": "Unique perspective or angle",
+    "title": "SEO-optimized title matching article type format (60-70 characters).",
+    "summary": "2-3 sentence summary of the topic and why it matters now. Include forward-looking language when relevant.",
+    "angle": "Unique perspective or angle that makes this topic stand out. Can include predictions or forward-looking insights.",
+    "hook": "Compelling opening hook (1-2 sentences) that grabs attention and sets up the article.",
     "relevanceScore": 0.85,
     "sources": [
       {
@@ -71,34 +116,64 @@ export function createResearchAgent() {
       // Use GPT-5.1 with search capabilities (or fallback to o1/o3 which have web access)
       const searchModel = process.env.OPENAI_SEARCH_MODEL || "gpt-5.2";
 
+      const currentDate = new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
       const industryContext = state.industry
         ? ` in the ${state.industry} industry`
         : "";
       const searchPrompts = queries.map(
         (query) =>
-          `Research recent news and trends about: "${query}"${industryContext}.
-        
-        Provide a comprehensive summary of:
-        1. Recent developments and news
-        2. Key trends and insights
-        3. Important sources (include URLs if you know them, or describe the sources)
-        
-        Format your response with clear sections and include any URLs or source information you can provide.`
+          `Find RECENT news + credible sources about: "${query}"${industryContext}.
+
+Today's date is ${currentDate}. Prioritize:
+- recent developments
+- emerging trends + forecasts
+
+Return a short bulleted list of sources with:
+- URL
+- Title
+- 1-sentence summary/snippet
+- Publication date if available`
       );
 
-      const searchResults = await Promise.all(
-        searchPrompts.map(async (prompt) => {
-          try {
-            // Use OpenAI API with search tool enabled
-            // GPT-5.1 and o1/o3 models support web search
-            const hasWebAccess =
-              searchModel.includes("o1") ||
-              searchModel.includes("o3") ||
-              searchModel.includes("5.1");
-            searchModel.includes("5.2");
+      // Fast path: Tavily (if configured), otherwise fallback to model-based extraction.
+      // Always cap work to keep topic discovery snappy.
+      const MAX_QUERIES = 2;
+      const prompts = searchPrompts.slice(0, MAX_QUERIES);
 
-            // For GPT-5.1, 5.2 and o1/o3 models, web search is built-in
-            // For other models, we'll rely on their knowledge and prompt engineering
+      const searchResults: Source[][] = [];
+
+      // 1) Tavily (fast) — do one query per prompt.
+      const tavilyResults = await Promise.all(
+        queries
+          .slice(0, MAX_QUERIES)
+          .map((q) =>
+            tavilySearchSources({ query: q, maxResults: 6, timeoutMs: 7000 })
+          )
+      );
+      if (tavilyResults.some((r) => r.length > 0)) {
+        searchResults.push(...tavilyResults);
+      } else {
+        // 2) Fallback: model-based “search” (best-effort), with strict timeout
+        const hasWebAccess =
+          searchModel.includes("o1") ||
+          searchModel.includes("o3") ||
+          searchModel.includes("5.1") ||
+          searchModel.includes("5.2");
+
+        const SEARCH_TIMEOUT_MS = 25000;
+
+        const runOne = async (prompt: string): Promise<Source[]> => {
+          const controller = new AbortController();
+          const timeout = setTimeout(
+            () => controller.abort(),
+            SEARCH_TIMEOUT_MS
+          );
+          try {
             const response = await openai.chat.completions.create({
               model: searchModel,
               messages: [
@@ -106,23 +181,30 @@ export function createResearchAgent() {
                   role: "system",
                   content: `You are a research assistant. ${
                     hasWebAccess
-                      ? "You have access to real-time web search - use it to find current information, news, and trends. Always cite your sources with URLs."
-                      : "Provide information based on your knowledge and include relevant URLs when possible."
-                  } Always include source URLs, titles, and summaries when providing information.`,
+                      ? "You have access to real-time web search. Use it. Always cite URLs."
+                      : "Work from your knowledge; still include URLs when possible."
+                  } Return concise sources only.`,
                 },
                 { role: "user", content: prompt },
               ],
-              reasoning_effort: "medium",
+              // Keep this fast; the analyze node will do the heavy lifting.
+              reasoning_effort: "low" as any,
+            }, {
+              signal: controller.signal,
             });
-
             const content = response.choices[0]?.message?.content || "";
             return extractSourcesFromText(content, state.industry || "general");
           } catch (error) {
             console.error("Search error:", error);
             return [];
+          } finally {
+            clearTimeout(timeout);
           }
-        })
-      );
+        };
+
+        const fallback = await Promise.all(prompts.map(runOne));
+        searchResults.push(...fallback);
+      }
 
       const sources = flattenAndDedupe(searchResults.flat());
       return { sources };
@@ -133,9 +215,12 @@ export function createResearchAgent() {
         ? `Industry: ${state.industry}`
         : "Industry: Not specified (searching based on keywords only)";
 
+      const articleTypeGuidelines = getArticleTypeGuidelines(state.articleType);
+
       const prompt = researchAgentPrompt
         .replace("{industrySection}", industrySection)
         .replace("{keywords}", state.keywords.join(", "))
+        .replace("{articleTypeGuidelines}", articleTypeGuidelines)
         .replace("{existingTopics}", state.existingTopics.join("\n"));
 
       const response = await analysisModel.invoke([
@@ -199,25 +284,36 @@ export function createResearchAgent() {
 }
 
 // Helper functions (stubs - to be implemented)
-function generateSearchQueries(industry: string | undefined, keywords: string[]): string[] {
-  // If we have keywords, use them (with optional industry prefix)
-  if (keywords.length > 0) {
-    if (industry) {
-      // Combine industry with keywords for better context
-      return keywords.map(k => `${industry} ${k}`);
-    } else {
-      // Just use keywords directly
-      return keywords;
-    }
-  }
-  
-  // If no keywords but we have industry, use industry-based queries
-  if (industry) {
-    return [`${industry} news`, `${industry} trends`, `${industry} latest developments`];
-  }
-  
-  // Fallback: generic search queries
-  return ["trending topics", "latest news", "current events"];
+function generateSearchQueries(
+  industry: string | undefined,
+  keywords: string[]
+): string[] {
+  // Speed-first query strategy:
+  // - cap to 1–2 queries
+  // - keep queries short and “search-engine-like”
+  const cleanKeywords = keywords
+    .map((k) => k.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+
+  const base = industry ? `${industry}` : "";
+  const kw = cleanKeywords.slice(0, 2).join(" ");
+
+  const q1 = [base, kw, "trends", "news", "updates"]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  const q2 = [base, kw, "predictions", "latest"]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  const queries = [q1, q2].filter((q) => q.length > 0);
+  if (queries.length > 0) return queries.slice(0, 2);
+
+  if (industry) return [`${industry} trends news`];
+  return ["trends news"];
 }
 
 function flattenAndDedupe(results: Source[]): Source[] {

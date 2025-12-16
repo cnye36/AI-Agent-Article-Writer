@@ -165,7 +165,7 @@ export default function ArticlePage() {
       });
 
       if (response.ok) {
-        router.push("/dashboard");
+        router.push("/dashboard?tab=library");
       }
     } catch (err) {
       console.error("Failed to delete:", err);
@@ -249,10 +249,10 @@ export default function ArticlePage() {
           <h1 className="text-2xl font-bold mb-4">Article Not Found</h1>
           <p className="text-zinc-400 mb-6">{error || "The article you're looking for doesn't exist."}</p>
           <button
-            onClick={() => router.push("/dashboard")}
+            onClick={() => router.push("/dashboard?tab=library")}
             className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg"
           >
-            Back to Dashboard
+            Back to Articles
           </button>
         </div>
       </div>
@@ -262,15 +262,15 @@ export default function ArticlePage() {
   const statusConfig = getStatusConfig(article.status);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
+    <div className="h-screen overflow-hidden bg-zinc-950 text-white flex flex-col">
       {/* Header */}
       <header className="border-b border-zinc-800 px-6 py-3 flex items-center justify-between bg-zinc-900/50">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => router.push("/dashboard")}
+            onClick={() => router.push("/dashboard?tab=library")}
             className="text-zinc-400 hover:text-white"
           >
-            ← Back
+            ← Back to Articles
           </button>
           <div>
             <h1 className="font-semibold truncate max-w-md">{article.title}</h1>
@@ -321,7 +321,7 @@ export default function ArticlePage() {
             <button className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm">
               Export ▾
             </button>
-            <div className="absolute right-0 top-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1 hidden group-hover:block min-w-[120px] z-10">
+            <div className="absolute right-0 top-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1 hidden group-hover:block min-w-[120px] z-[60]">
               <button
                 onClick={() => handleExport("md")}
                 className="w-full px-3 py-1.5 text-sm text-left hover:bg-zinc-700"
@@ -354,7 +354,7 @@ export default function ArticlePage() {
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden">
         {activeTab === "edit" && (
           <CanvasEditor
             initialContent={article.content}

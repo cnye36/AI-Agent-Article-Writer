@@ -145,6 +145,20 @@
   font-style: italic;
 }
 
+/* Underline */
+.editor-content u {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Strikethrough */
+.editor-content s,
+.editor-content strike,
+.editor-content del {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
 /* Focus styles */
 .editor-content:focus {
   outline: none;

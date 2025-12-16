@@ -10,9 +10,18 @@ interface OutlineStageProps {
   onBack: () => void;
   onSelectDifferentTopic?: () => void;
   onOutlineUpdate?: (updatedOutline: Outline) => void;
+  onDelete?: () => void;
 }
 
-export function OutlineStage({ outline, isLoading, onApprove, onBack, onSelectDifferentTopic, onOutlineUpdate }: OutlineStageProps) {
+export function OutlineStage({
+  outline,
+  isLoading,
+  onApprove,
+  onBack,
+  onSelectDifferentTopic,
+  onOutlineUpdate,
+  onDelete,
+}: OutlineStageProps) {
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(
     null
   );
@@ -210,54 +219,54 @@ export function OutlineStage({ outline, isLoading, onApprove, onBack, onSelectDi
                       Target: ~{section.wordTarget} words
                     </p>
                   </div>
-                <button
-                  onClick={() =>
-                    setEditingSectionIndex(
-                      editingSectionIndex === index ? null : index
-                    )
-                  }
-                  className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white"
-                  title="Edit this section"
-                >
-                  ✏️ Edit
-                </button>
-              </div>
-
-              {/* Edit Input */}
-              {editingSectionIndex === index && (
-                <div className="mt-4 p-4 bg-zinc-800 rounded-lg border border-zinc-700">
-                  <label className="block text-sm text-zinc-400 mb-2">
-                    What do you want to change?
-                  </label>
-                  <textarea
-                    value={editPrompt}
-                    onChange={(e) => setEditPrompt(e.target.value)}
-                    placeholder="E.g., 'Make this section more technical' or 'Add more examples'"
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
-                    rows={3}
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleSectionEdit(index)}
-                      disabled={!editPrompt.trim() || isRewriting}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isRewriting ? "Rewriting..." : "Submit"}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditingSectionIndex(null);
-                        setEditPrompt("");
-                      }}
-                      disabled={isRewriting}
-                      className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                  <button
+                    onClick={() =>
+                      setEditingSectionIndex(
+                        editingSectionIndex === index ? null : index
+                      )
+                    }
+                    className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white"
+                    title="Edit this section"
+                  >
+                    ✏️ Edit
+                  </button>
                 </div>
-              )}
-            </div>
+
+                {/* Edit Input */}
+                {editingSectionIndex === index && (
+                  <div className="mt-4 p-4 bg-zinc-800 rounded-lg border border-zinc-700">
+                    <label className="block text-sm text-zinc-400 mb-2">
+                      What do you want to change?
+                    </label>
+                    <textarea
+                      value={editPrompt}
+                      onChange={(e) => setEditPrompt(e.target.value)}
+                      placeholder="E.g., 'Make this section more technical' or 'Add more examples'"
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                      rows={3}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleSectionEdit(index)}
+                        disabled={!editPrompt.trim() || isRewriting}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isRewriting ? "Rewriting..." : "Submit"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingSectionIndex(null);
+                          setEditPrompt("");
+                        }}
+                        disabled={isRewriting}
+                        className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             ))
           ) : (
             // Skeleton loaders for sections while generating
@@ -278,14 +287,17 @@ export function OutlineStage({ outline, isLoading, onApprove, onBack, onSelectDi
 
         <div className="mt-6 pt-6 border-t border-zinc-800">
           <h4 className="font-semibold mb-2">Conclusion</h4>
-          {!structure.conclusion?.summary || structure.conclusion.summary === "" ? (
+          {!structure.conclusion?.summary ||
+          structure.conclusion.summary === "" ? (
             <div className="space-y-2 animate-pulse">
               <div className="h-4 bg-zinc-800 rounded w-full" />
               <div className="h-4 bg-zinc-800 rounded w-4/5" />
             </div>
           ) : (
             <>
-              <p className="text-zinc-300 mb-2">{structure.conclusion.summary}</p>
+              <p className="text-zinc-300 mb-2">
+                {structure.conclusion.summary}
+              </p>
               <p className="text-zinc-400 text-sm">
                 {structure.conclusion.callToAction}
               </p>
@@ -320,6 +332,39 @@ export function OutlineStage({ outline, isLoading, onApprove, onBack, onSelectDi
             className="px-4 py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl"
           >
             Choose Different Topic
+          </button>
+        )}
+        {onDelete && (
+          <button
+            onClick={async () => {
+              if (
+                !confirm(
+                  "Are you sure you want to permanently delete this outline?"
+                )
+              ) {
+                return;
+              }
+              try {
+                const response = await fetch(
+                  `/api/agents/outline?id=${localOutline?.id}`,
+                  {
+                    method: "DELETE",
+                  }
+                );
+                if (response.ok) {
+                  onDelete();
+                } else {
+                  const data = await response.json();
+                  alert(data.error || "Failed to delete outline");
+                }
+              } catch (error) {
+                console.error("Error deleting outline:", error);
+                alert("Failed to delete outline");
+              }
+            }}
+            className="px-4 py-3 bg-red-600 hover:bg-red-500 rounded-xl text-sm font-medium"
+          >
+            Delete Outline
           </button>
         )}
         <button

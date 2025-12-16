@@ -4,6 +4,8 @@ import type { ArticleType, Article, Source } from "@/types";
 import { createResearchAgent } from "./research-agent";
 import { createOutlineAgent } from "./outline-agent";
 import { createWriterAgent } from "./writer-agent";
+import { INDUSTRY_KEYWORDS } from "@/lib/config";
+
 
 // Agent-specific types (matching what agents actually use)
 interface TopicCandidate {
@@ -127,14 +129,6 @@ export function createOrchestrator() {
 
 // Helper functions (stubs - to be implemented)
 function getIndustryKeywords(industry: string): string[] {
-  const INDUSTRY_KEYWORDS: Record<string, string[]> = {
-    ai: ["artificial intelligence", "machine learning", "deep learning", "LLM", "GPT"],
-    tech: ["technology", "software", "startup", "SaaS", "cloud computing"],
-    health: ["healthcare", "medical", "wellness", "biotech", "digital health"],
-    finance: ["fintech", "banking", "investment", "cryptocurrency", "stock market"],
-    climate: ["climate change", "sustainability", "renewable energy", "clean tech"],
-    crypto: ["cryptocurrency", "blockchain", "web3", "DeFi", "NFT"],
-  };
   return INDUSTRY_KEYWORDS[industry] || [];
 }
 

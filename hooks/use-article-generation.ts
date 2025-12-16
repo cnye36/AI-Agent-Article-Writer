@@ -32,7 +32,10 @@ interface UseArticleGenerationReturn {
 
   // Actions
   setConfig: (config: Partial<GenerationConfig>) => void;
-  startResearch: (config: GenerationConfig) => Promise<void>;
+  startResearch: (
+    config: GenerationConfig,
+    useBrainstorm?: boolean
+  ) => Promise<void>;
   selectTopic: (topic: Topic) => Promise<void>;
   rejectTopic: (topicId: string) => Promise<void>;
   generateOutline: () => Promise<void>;
@@ -75,37 +78,67 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
     setConfigState((prev) => ({ ...prev, ...updates }));
   }, []);
 
-  const startResearch = useCallback(async (cfg: GenerationConfig) => {
-    setIsLoading(true);
-    setError(null);
+  const startResearch = useCallback(
+    async (cfg: GenerationConfig, useBrainstorm: boolean = false) => {
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      const response = await fetch("/api/agents/research", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          industry: cfg.industry || undefined,
-          keywords: cfg.keywords,
-          maxTopics: 5,
-        }),
-      });
+      try {
+        const endpoint = useBrainstorm
+          ? "/api/agents/brainstorm"
+          : "/api/agents/research";
 
-      if (!response.ok) {
+        const requestBody = useBrainstorm
+          ? {
+              ...(cfg.industry && cfg.industry.trim()
+                ? { industry: cfg.industry }
+                : {}),
+              ...(cfg.keywords && cfg.keywords.length > 0
+                ? { keywords: cfg.keywords }
+                : {}),
+              ...(cfg.articleType ? { articleType: cfg.articleType } : {}),
+              targetAudience: "general audience",
+              contentGoals: ["educate", "engage"],
+              count: 5,
+            }
+          : {
+              ...(cfg.industry && cfg.industry.trim()
+                ? { industry: cfg.industry }
+                : {}),
+              ...(cfg.keywords && cfg.keywords.length > 0
+                ? { keywords: cfg.keywords }
+                : {}),
+              ...(cfg.articleType ? { articleType: cfg.articleType } : {}),
+              maxTopics: 5,
+            };
+
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(
+            data.error ||
+              `Failed to ${useBrainstorm ? "brainstorm" : "research"} topics`
+          );
+        }
+
         const data = await response.json();
-        throw new Error(data.error || "Failed to research topics");
+        setTopics(data.topics);
+        setConfigState(cfg);
+        setResearchMetadata(data.metadata || null);
+        setStage("topics");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred");
+      } finally {
+        setIsLoading(false);
       }
-
-      const data = await response.json();
-      setTopics(data.topics);
-      setConfigState(cfg);
-      setResearchMetadata(data.metadata || null);
-      setStage("topics");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   const selectTopic = useCallback(
     async (topic: Topic) => {
@@ -369,96 +402,119 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
     }
   }, [selectedTopic, config]);
 
-  const approveOutline = useCallback(async () => {
-    if (!outline) {
-      setError("No outline to approve");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Approve the outline
-      const approveResponse = await fetch("/api/agents/outline", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          outlineId: outline.id,
-          approved: true,
-        }),
-      });
-
-      if (!approveResponse.ok) {
-        throw new Error("Failed to approve outline");
+  const approveOutline = useCallback(
+    async (useBackgroundJob: boolean = false) => {
+      if (!outline) {
+        setError("No outline to approve");
+        return;
       }
 
-      // Start writing - article will be saved to DB automatically
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Approve the outline
+        const approveResponse = await fetch("/api/agents/outline", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            outlineId: outline.id,
+            approved: true,
+          }),
+        });
+
+        if (!approveResponse.ok) {
+          throw new Error("Failed to approve outline");
+        }
+
+        // Start writing - article will be saved to DB automatically
+        setStage("content");
+
+        const writeResponse = await fetch("/api/agents/writer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            outlineId: outline.id,
+            useBackgroundJob,
+          }),
+        });
+
+        if (!writeResponse.ok) {
+          const data = await writeResponse.json();
+          throw new Error(data.error || "Failed to generate article");
+        }
+
+        const data = await writeResponse.json();
+
+        if (useBackgroundJob) {
+          // Return job ID instead of article
+          return data.jobId;
+        } else {
+          setArticle(data.article);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred");
+        setStage("outline"); // Go back to outline on error
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [outline]
+  );
+
+  const editOutline = useCallback(
+    (structure: OutlineStructure) => {
+      if (!outline) return;
+      setOutline({
+        ...outline,
+        structure,
+      });
+    },
+    [outline]
+  );
+
+  const generateArticle = useCallback(
+    async (useBackgroundJob: boolean = false) => {
+      if (!outline) {
+        setError("No outline available");
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
       setStage("content");
 
-      const writeResponse = await fetch("/api/agents/writer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          outlineId: outline.id,
-        }),
-      });
+      try {
+        const response = await fetch("/api/agents/writer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            outlineId: outline.id,
+            useBackgroundJob,
+          }),
+        });
 
-      if (!writeResponse.ok) {
-        const data = await writeResponse.json();
-        throw new Error(data.error || "Failed to generate article");
-      }
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || "Failed to generate article");
+        }
 
-      const data = await writeResponse.json();
-      setArticle(data.article);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      setStage("outline"); // Go back to outline on error
-    } finally {
-      setIsLoading(false);
-    }
-  }, [outline]);
-
-  const editOutline = useCallback((structure: OutlineStructure) => {
-    if (!outline) return;
-    setOutline({
-      ...outline,
-      structure,
-    });
-  }, [outline]);
-
-  const generateArticle = useCallback(async () => {
-    if (!outline) {
-      setError("No outline available");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    setStage("content");
-
-    try {
-      const response = await fetch("/api/agents/writer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          outlineId: outline.id,
-        }),
-      });
-
-      if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Failed to generate article");
-      }
 
-      const data = await response.json();
-      setArticle(data.article);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [outline]);
+        if (useBackgroundJob) {
+          // Return job ID for polling
+          return data.jobId;
+        } else {
+          setArticle(data.article);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [outline]
+  );
 
   const reset = useCallback(() => {
     setStage("config");
@@ -487,7 +543,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
       setArticle(null);
     }
   }, []);
-  
+
   // Allow selecting a different topic
   const selectDifferentTopic = useCallback(() => {
     setSelectedTopic(null);

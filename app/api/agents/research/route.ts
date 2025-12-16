@@ -8,6 +8,15 @@ import { z } from "zod";
 const ResearchRequestSchema = z.object({
   industry: z.string().optional(),
   keywords: z.array(z.string()).optional(),
+  articleType: z.enum([
+    "blog",
+    "technical",
+    "news",
+    "opinion",
+    "tutorial",
+    "listicle",
+    "affiliate",
+  ]).optional(),
   maxTopics: z.number().min(1).max(20).default(5),
 }).refine(
   (data) => data.industry || (data.keywords && data.keywords.length > 0),
@@ -17,80 +26,7 @@ const ResearchRequestSchema = z.object({
 );
 
 // Industry keyword mappings for enhanced search
-const INDUSTRY_KEYWORDS: Record<string, string[]> = {
-  ai: [
-    "artificial intelligence",
-    "machine learning",
-    "deep learning",
-    "LLM",
-    "GPT",
-    "neural network",
-    "AI agents",
-    "generative AI",
-    "transformer models",
-    "computer vision",
-  ],
-  tech: [
-    "technology",
-    "software",
-    "startup",
-    "SaaS",
-    "cloud computing",
-    "cybersecurity",
-    "devops",
-    "programming",
-    "open source",
-    "tech industry",
-  ],
-  health: [
-    "healthcare",
-    "medical",
-    "wellness",
-    "biotech",
-    "digital health",
-    "telemedicine",
-    "mental health",
-    "pharmaceutical",
-    "clinical trials",
-    "health tech",
-  ],
-  finance: [
-    "fintech",
-    "banking",
-    "investment",
-    "cryptocurrency",
-    "stock market",
-    "venture capital",
-    "financial services",
-    "payments",
-    "insurance tech",
-    "trading",
-  ],
-  climate: [
-    "climate change",
-    "sustainability",
-    "renewable energy",
-    "clean tech",
-    "carbon footprint",
-    "ESG",
-    "green technology",
-    "electric vehicles",
-    "solar energy",
-    "climate tech",
-  ],
-  crypto: [
-    "cryptocurrency",
-    "blockchain",
-    "web3",
-    "DeFi",
-    "NFT",
-    "Bitcoin",
-    "Ethereum",
-    "smart contracts",
-    "decentralized",
-    "crypto regulation",
-  ],
-};
+import { INDUSTRY_KEYWORDS, INDUSTRY_NAMES } from "@/lib/config";
 
 export async function POST(request: NextRequest) {
   try {
@@ -117,7 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { industry, keywords } = validationResult.data;
+    const { industry, keywords, articleType } = validationResult.data;
 
     // Get industry keywords, merge with custom keywords
     // If only industry is provided, use industry keywords
@@ -129,6 +65,8 @@ export async function POST(request: NextRequest) {
     // Merge: user keywords first (more specific), then industry keywords
     // Use Set to deduplicate while preserving order
     const searchKeywords = [...new Set([...userKeywords, ...industryKeywords])];
+    // Speed guardrail: don't send huge keyword lists into the search step
+    const searchKeywordsForAgent = searchKeywords.slice(0, 6);
     
     // Ensure we have at least some keywords to search with
     if (searchKeywords.length === 0) {
@@ -138,43 +76,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch existing article titles to avoid duplicates
-    let existingTopics: string[] = [];
-    if (industry) {
-      const fetchedIndustryId = await getIndustryId(supabase, industry);
-      
-      if (fetchedIndustryId) {
-        const { data: existingArticles, error: articlesError } = await supabase
-          .from("articles")
-          .select("title, excerpt")
-          .eq("industry_id", fetchedIndustryId)
-          .in("status", ["draft", "review", "published"]);
-
-        if (articlesError) {
-          console.error("Error fetching existing articles:", articlesError);
-        }
-
-        existingTopics = existingArticles?.map((a: { title: string }) => a.title) || [];
-      }
-    }
-
-    // Fetch existing pending topics to avoid duplicates
-    const { data: pendingTopics } = await supabase
-      .from("topics")
-      .select("title")
-      .eq("status", "pending");
-
-    const allExistingTopics = [
-      ...existingTopics,
-      ...((pendingTopics as Array<{ title: string }> | null)?.map((t) => t.title) || []),
-    ];
+    // We rely on vector search for deduplication, so we don't need to fetch all existing topics here.
+    const allExistingTopics: string[] = [];
 
     // Initialize and run the research agent
     const researchAgent = createResearchAgent();
 
     const result = await researchAgent.invoke({
       industry,
-      keywords: searchKeywords,
+      keywords: searchKeywordsForAgent,
+      articleType,
       existingTopics: allExistingTopics,
     });
 
@@ -234,9 +145,11 @@ export async function POST(request: NextRequest) {
       embedding: topic.embedding, // Save the embedding vector
       metadata: {
         angle: topic.angle,
+        hook: topic.hook, // Save the hook for use in outline/article generation
         discoveredAt: new Date().toISOString(),
         searchKeywords: searchKeywords.slice(0, 5),
         similarTopics: topic.similarTopics, // Store similar topics for reference
+        articleType: articleType, // Store the article type used for this topic
       },
     }));
 
@@ -283,8 +196,8 @@ export async function POST(request: NextRequest) {
       topics: savedTopics || [],
       metadata: {
         industry: industryForDb,
-        keywordsUsed: searchKeywords.slice(0, 10),
-        existingArticlesChecked: allExistingTopics.length,
+        keywordsUsed: searchKeywordsForAgent.slice(0, 10),
+        existingArticlesChecked: 0, // We now use vector search for deduplication
         topicsDiscovered: (savedTopics || []).length,
         duplicatesFiltered: duplicatesFiltered.length,
         duplicates: duplicatesFiltered.map((d) => ({
@@ -364,6 +277,81 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// DELETE endpoint to delete a topic
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+
+    // Check authentication
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Topic ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Check if topic exists
+    const { data: topic, error: fetchError } = await supabase
+      .from("topics")
+      .select("id, title")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !topic) {
+      return NextResponse.json({ error: "Topic not found" }, { status: 404 });
+    }
+
+    // Check if topic has associated outlines or articles
+    const { data: outlines } = await supabase
+      .from("outlines")
+      .select("id")
+      .eq("topic_id", id)
+      .limit(1);
+
+    if (outlines && outlines.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Cannot delete topic with associated outlines. Delete outlines first.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Delete topic (cascade will handle any related data if configured)
+    const { error: deleteError } = await supabase
+      .from("topics")
+      .delete()
+      .eq("id", id);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Topic "${topic.title}" deleted`,
+    });
+  } catch (error) {
+    console.error("Error deleting topic:", error);
+    return NextResponse.json(
+      { error: "Failed to delete topic" },
+      { status: 500 }
+    );
+  }
+}
+
 // Helper function to get industry ID
 async function getIndustryId(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -395,19 +383,10 @@ async function getOrCreateIndustry(
   }
 
   // Create new industry
-  const industryNames: Record<string, string> = {
-    ai: "AI & Machine Learning",
-    tech: "Technology",
-    health: "Health & Wellness",
-    finance: "Finance & Fintech",
-    climate: "Climate & Sustainability",
-    crypto: "Crypto & Web3",
-  };
-
   const insertResult = await supabase
     .from("industries")
     .insert({
-      name: industryNames[industrySlug] || industrySlug,
+      name: INDUSTRY_NAMES[industrySlug] || industrySlug,
       slug: industrySlug,
       keywords: INDUSTRY_KEYWORDS[industrySlug] || [],
     } as any)

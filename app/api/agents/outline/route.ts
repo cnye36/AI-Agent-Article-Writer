@@ -6,7 +6,15 @@ import { z } from "zod";
 // Request validation schema
 const OutlineRequestSchema = z.object({
   topicId: z.string().uuid(),
-  articleType: z.enum(["blog", "technical", "news", "opinion", "tutorial"]),
+  articleType: z.enum([
+    "blog",
+    "technical",
+    "news",
+    "opinion",
+    "tutorial",
+    "listicle",
+    "affiliate",
+  ]),
   targetLength: z.enum(["short", "medium", "long"]),
   tone: z.string().default("professional"),
   customInstructions: z.string().optional(),
@@ -43,6 +51,19 @@ const ARTICLE_TYPE_CONFIG = {
     sectionCount: { short: 5, medium: 8, long: 12 },
     includeSteps: true,
     formalityLevel: "casual",
+  },
+  listicle: {
+    description: "Numbered list format, scannable, engaging",
+    sectionCount: { short: 5, medium: 8, long: 12 }, // Each item is a section
+    includeNumberedItems: true,
+    formalityLevel: "moderate",
+  },
+  affiliate: {
+    description: "Comparison, recommendation, product-focused",
+    sectionCount: { short: 4, medium: 6, long: 8 },
+    includeComparisons: true,
+    includeRecommendations: true,
+    formalityLevel: "moderate",
   },
 };
 
@@ -124,6 +145,7 @@ export async function POST(request: NextRequest) {
         summary: topic.summary || "",
         sources: topic.sources || [],
         angle: topic.metadata?.angle || "",
+        hook: topic.metadata?.hook || "", // Use hook from research if available
         relevanceScore: 0.8, // Default relevance score
       },
       articleType,
@@ -363,6 +385,84 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
+// DELETE endpoint to delete an outline
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+
+    // Check authentication
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Outline ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Check if outline exists
+    const { data: outline, error: fetchError } = await supabase
+      .from("outlines")
+      .select("id, structure")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !outline) {
+      return NextResponse.json({ error: "Outline not found" }, { status: 404 });
+    }
+
+    // Check if outline has associated articles
+    const { data: articles } = await supabase
+      .from("articles")
+      .select("id")
+      .eq("outline_id", id)
+      .limit(1);
+
+    if (articles && articles.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot delete outline with associated articles. Delete articles first.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Delete outline (cascade will handle any related data if configured)
+    const { error: deleteError } = await supabase
+      .from("outlines")
+      .delete()
+      .eq("id", id);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    const outlineTitle = outline.structure?.title || "Untitled Outline";
+
+    return NextResponse.json({
+      success: true,
+      message: `Outline "${outlineTitle}" deleted`,
+    });
+  } catch (error) {
+    console.error("Error deleting outline:", error);
+    return NextResponse.json(
+      { error: "Failed to delete outline" },
+      { status: 500 }
+    );
+  }
+}
+
 // Streaming endpoint for progressive outline generation
 export async function PUT(request: NextRequest) {
   const encoder = new TextEncoder();
@@ -560,6 +660,7 @@ export async function PUT(request: NextRequest) {
               summary: topic.summary || "",
               sources: topic.sources || [], // Use existing sources immediately
               angle: topic.metadata?.angle || "",
+              hook: topic.metadata?.hook || "", // Use hook from research if available
               relevanceScore: 0.8,
             },
             articleType,

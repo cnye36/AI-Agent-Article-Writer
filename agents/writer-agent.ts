@@ -43,13 +43,14 @@ const WriterState = Annotation.Root({
   Article Type: {articleType}
   Tone: {tone}
   
-  IMPORTANT: Do not use any em dashes in your Writing.
+  
 
   You're writing section by section. For each section:
   - Follow the key points in the outline
   - Hit the word target (approximately)
   - Transition smoothly from the previous section
-  - Insert internal links where suggested`;
+  - Insert internal links where suggested
+  - IMPORTANT: Do not use any em dashes in your Writing.`;
 
   
   export function createWriterAgent() {

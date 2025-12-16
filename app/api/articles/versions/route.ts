@@ -8,7 +8,7 @@ const CreateArticleSchema = z.object({
   content: z.string().min(1),
   excerpt: z.string().max(300).optional(),
   industryId: z.string().uuid(),
-  articleType: z.enum(["blog", "technical", "news", "opinion", "tutorial"]),
+  articleType: z.enum(["blog", "technical", "news", "opinion", "tutorial", "listicle", "affiliate"]),
   status: z.enum(["draft", "review", "published"]).default("draft"),
   seoKeywords: z.array(z.string()).optional(),
   outlineId: z.string().uuid().optional(),

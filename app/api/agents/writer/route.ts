@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createWriterAgent } from "@/agents/writer-agent";
+import { JobQueue } from "@/lib/job-queue";
+import { processArticleWritingJob } from "@/lib/workers/article-writer-worker";
 import { z } from "zod";
-import type { Article } from "@/types";
+import type { Article, WriteArticleJobInput } from "@/types";
 
 // Request validation schema
 const WriteRequestSchema = z.object({
   outlineId: z.string().uuid(),
   customInstructions: z.string().optional(),
   streamResponse: z.boolean().default(false),
+  useBackgroundJob: z.boolean().default(false), // New option for background processing
 });
 
 export async function POST(request: NextRequest) {
@@ -36,8 +39,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { outlineId, customInstructions } = validationResult.data;
+    const { outlineId, customInstructions, useBackgroundJob } = validationResult.data;
 
+    // If useBackgroundJob is true, create a job and return immediately
+    if (useBackgroundJob) {
+      const jobInput: WriteArticleJobInput = {
+        outlineId,
+        customInstructions,
+      };
+
+      const job = await JobQueue.createJob("write_article", jobInput, user.id);
+
+      // Trigger job processing asynchronously (fire and forget)
+      // In production, this would be handled by a separate worker process
+      processArticleWritingJob(job.id).catch((error) => {
+        console.error("Background job processing failed:", error);
+      });
+
+      return NextResponse.json({
+        success: true,
+        jobId: job.id,
+        message:
+          "Article generation started. Use the job ID to check progress.",
+      });
+    }
+
+    // Continue with synchronous processing if useBackgroundJob is false
     // Fetch the outline with topic data
     const { data: outlineData, error: outlineError } = await supabase
       .from("outlines")
