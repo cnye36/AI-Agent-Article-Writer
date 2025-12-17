@@ -32,7 +32,9 @@ function DashboardContent() {
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam && ["create", "topics", "library"].includes(tabParam)) {
-      setActiveTab(tabParam as "create" | "topics" | "library");
+      setTimeout(() => {
+        setActiveTab(tabParam as "create" | "topics" | "library");
+      }, 0);
     }
   }, [searchParams]);
 
