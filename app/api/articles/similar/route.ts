@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { findSimilarPublishedArticles } from "@/lib/ai/article-embeddings";
 
+// Force dynamic rendering - this route uses cookies for authentication
+export const dynamic = 'force-dynamic';
+
 // GET - Find similar published articles
 export async function GET(request: NextRequest) {
   try {

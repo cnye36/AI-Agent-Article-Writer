@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { JobQueue } from "@/lib/job-queue";
 import type { JobType, JobStatus } from "@/types";
 
+// Force dynamic rendering - this route uses cookies for authentication
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/jobs - List user's jobs
  */

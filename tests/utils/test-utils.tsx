@@ -1,5 +1,6 @@
 import { render, RenderOptions } from '@testing-library/react';
 import { ReactElement, ReactNode } from 'react';
+import { vi } from "vitest";
 
 // Add providers if needed in the future
 function AllProviders({ children }: { children: ReactNode }) {

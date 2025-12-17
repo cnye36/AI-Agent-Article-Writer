@@ -55,23 +55,26 @@ export const mockOutline: Outline = {
 };
 
 export const mockArticle: Article = {
-  id: 'test-article-id',
-  outline_id: 'test-outline-id',
-  industry_id: 'ai-industry-id',
-  title: 'AI Advancements in 2024',
-  slug: 'ai-advancements-2024',
-  excerpt: 'Recent developments in artificial intelligence',
-  content: '<h1>AI Advancements in 2024</h1><p>Artificial intelligence is transforming industries...</p>',
-  content_html: '<h1>AI Advancements in 2024</h1><p>Artificial intelligence is transforming industries...</p>',
-  status: 'draft',
-  article_type: 'blog',
-  seo_keywords: ['AI', 'machine learning'],
+  id: "test-article-id",
+  outline_id: "test-outline-id",
+  industry_id: "ai-industry-id",
+  title: "AI Advancements in 2024",
+  slug: "ai-advancements-2024",
+  cover_image: "https://example.com/ai-advancements-2024.jpg",
+  excerpt: "Recent developments in artificial intelligence",
+  content:
+    "<h1>AI Advancements in 2024</h1><p>Artificial intelligence is transforming industries...</p>",
+  content_html:
+    "<h1>AI Advancements in 2024</h1><p>Artificial intelligence is transforming industries...</p>",
+  status: "draft",
+  article_type: "blog",
+  seo_keywords: ["AI", "machine learning"],
   word_count: 500,
   reading_time: 3,
   published_at: null,
   published_to: [],
-  created_at: '2024-01-01T00:00:00Z',
-  updated_at: '2024-01-01T00:00:00Z',
+  created_at: "2024-01-01T00:00:00Z",
+  updated_at: "2024-01-01T00:00:00Z",
 };
 
 export const mockGenerationConfig = {
