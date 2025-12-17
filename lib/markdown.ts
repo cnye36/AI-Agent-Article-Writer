@@ -3,17 +3,64 @@
 import type { JSONContent } from "@tiptap/core";
 
 /**
- * Convert TipTap JSON to Markdown
+ * Remove the first h1 heading from TipTap JSON content
  */
-export function tiptapToMarkdown(doc: JSONContent | string): string {
+export function removeFirstH1(doc: JSONContent): JSONContent {
+  if (!doc || !doc.content) {
+    return doc;
+  }
+
+  // Find the first h1 heading
+  const firstH1Index = doc.content.findIndex(
+    (node) => node.type === "heading" && node.attrs?.level === 1
+  );
+
+  if (firstH1Index === -1) {
+    return doc;
+  }
+
+  // Create a new content array without the first h1
+  const newContent = doc.content.filter((_, index) => index !== firstH1Index);
+
+  return {
+    ...doc,
+    content: newContent.length > 0 ? newContent : [{ type: "paragraph" }],
+  };
+}
+
+/**
+ * Convert TipTap JSON to Markdown
+ * @param doc - TipTap JSON document or markdown string
+ * @param options - Conversion options
+ * @param options.skipFirstH1 - If true, skip the first h1 heading in the output
+ */
+export function tiptapToMarkdown(
+  doc: JSONContent | string,
+  options?: { skipFirstH1?: boolean }
+): string {
   // If it's already a string, assume it's markdown
   if (typeof doc === "string") {
+    // If skipFirstH1 is true, remove the first h1 from markdown string
+    if (options?.skipFirstH1) {
+      // Remove first line if it's an h1 heading
+      const lines = doc.split("\n");
+      const firstLine = lines[0]?.trim();
+      if (firstLine && firstLine.startsWith("# ") && !firstLine.startsWith("##")) {
+        return lines.slice(1).join("\n").trim();
+      }
+    }
     return doc;
   }
 
   // Handle empty or invalid content
   if (!doc || !doc.content) {
     return "";
+  }
+
+  // Remove first h1 if requested
+  let processedDoc = doc;
+  if (options?.skipFirstH1) {
+    processedDoc = removeFirstH1(doc);
   }
 
   let markdown = "";
@@ -106,7 +153,7 @@ export function tiptapToMarkdown(doc: JSONContent | string): string {
   }
 
   // Process all top-level nodes
-  markdown = doc.content.map(processNode).join("");
+  markdown = processedDoc.content.map(processNode).join("");
 
   // Clean up extra newlines
   markdown = markdown.replace(/\n{3,}/g, "\n\n").trim();

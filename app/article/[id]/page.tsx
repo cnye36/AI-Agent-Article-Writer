@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CanvasEditor } from "@/components/canvas-editor";
 import { LoadingDialog } from "@/components/loading-dialog";
-import { downloadAsFile } from "@/lib/utils";
+import { downloadAsFile, removeFirstH1FromMarkdown } from "@/lib/utils";
 import { generateFrontmatter } from "@/lib/frontmatter";
 import { useArticleData } from "@/hooks/useArticleData";
 import { ArticleHeader } from "@/components/article/ArticleHeader";
@@ -146,7 +146,9 @@ export default function ArticlePage() {
 
       if (format === "pdf") {
         // Generate PDF using browser print API
-        const htmlContent = article.content_html || article.content;
+        // Remove first h1 from content since we're adding the title separately
+        const contentWithoutH1 = removeFirstH1FromMarkdown(article.content);
+        const htmlContent = article.content_html || contentWithoutH1;
         const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -221,7 +223,8 @@ export default function ArticlePage() {
       }
 
       // Markdown or plain text export
-      let content = article.content;
+      // Remove first h1 heading since frontmatter contains the title
+      let content = removeFirstH1FromMarkdown(article.content);
 
       // For markdown export, prepend frontmatter if available
       if (format === "md") {

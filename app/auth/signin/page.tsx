@@ -32,7 +32,7 @@ export default function SignInPage() {
       }
 
       // Redirect to dashboard
-      window.location.href = "/";
+      window.location.href = "/dashboard";
     } catch (err) {
       setError("An unexpected error occurred");
     } finally {

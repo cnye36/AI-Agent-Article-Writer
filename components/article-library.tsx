@@ -12,6 +12,7 @@ import {
   truncate,
   copyToClipboard,
   downloadAsFile,
+  removeFirstH1FromMarkdown,
 } from "@/lib/utils";
 import type { Article, Industry, ArticleType, ArticleStatus } from "@/types";
 
@@ -161,7 +162,7 @@ export function ArticleLibrary({ onEditArticle }: ArticleLibraryProps) {
   // Export article
   const exportArticle = useCallback((article: Article) => {
     downloadAsFile(
-      article.content,
+      removeFirstH1FromMarkdown(article.content),
       `${article.slug}.md`,
       "text/markdown"
     );
@@ -499,7 +500,7 @@ function ArticleCard({
               </button>
               <button
                 onClick={() => {
-                  copyToClipboard(article.content);
+                  copyToClipboard(removeFirstH1FromMarkdown(article.content));
                   setShowMenu(false);
                 }}
                 className="w-full px-3 py-1.5 text-sm text-left hover:bg-zinc-700"

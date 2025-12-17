@@ -164,6 +164,28 @@ export function throttle<T extends (...args: unknown[]) => unknown>(
   };
 }
 
+// Remove the first h1 heading from markdown content
+export function removeFirstH1FromMarkdown(markdown: string): string {
+  if (!markdown || !markdown.trim()) {
+    return markdown;
+  }
+
+  const lines = markdown.split("\n");
+  const firstLine = lines[0]?.trim();
+  
+  // Check if first line is an h1 heading (starts with "# " but not "##")
+  if (firstLine && firstLine.startsWith("# ") && !firstLine.startsWith("##")) {
+    // Remove the first line and any following empty lines
+    let startIndex = 1;
+    while (startIndex < lines.length && lines[startIndex]?.trim() === "") {
+      startIndex++;
+    }
+    return lines.slice(startIndex).join("\n").trim();
+  }
+
+  return markdown;
+}
+
 // Copy text to clipboard
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {

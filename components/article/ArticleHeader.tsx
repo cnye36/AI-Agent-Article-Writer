@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { cn, getStatusConfig, getArticleTypeLabel, formatRelativeTime, copyToClipboard } from "@/lib/utils";
+import { cn, getStatusConfig, getArticleTypeLabel, formatRelativeTime, copyToClipboard, removeFirstH1FromMarkdown } from "@/lib/utils";
 import type { Article } from "@/types";
 
 interface ArticleHeaderProps {
@@ -124,7 +124,7 @@ export function ArticleHeader({
         </div>
 
         <button
-          onClick={() => copyToClipboard(article.content)}
+          onClick={() => copyToClipboard(removeFirstH1FromMarkdown(article.content))}
           className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm"
           title="Copy to clipboard"
         >

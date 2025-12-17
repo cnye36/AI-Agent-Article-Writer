@@ -194,27 +194,6 @@ export interface ResearchResponse {
   };
 }
 
-export interface BrainstormRequest {
-  industry: string;
-  keywords?: string[];
-  articleType?: string;
-  targetAudience?: string;
-  contentGoals?: string[];
-  count?: number;
-}
-
-export interface BrainstormResponse {
-  success: boolean;
-  topics: Topic[];
-  metadata?: {
-    industry: string;
-    method: "brainstorm";
-    topicsGenerated: number;
-    avoidedTopicsCount: number;
-    keywordsUsed?: string[];
-  };
-}
-
 export interface OutlineRequest {
   topicId: string;
   articleType: ArticleType;

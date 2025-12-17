@@ -201,10 +201,10 @@ export function CreateArticleFlow({
         <ConfigStage
           config={config}
           onChange={(updates) => setConfig(updates)}
-          onNext={(useBrainstorm) => {
+          onNext={() => {
             // Reset cameFromFeed flag when starting new research from config
             cameFromFeed.current = false;
-            startResearch(config, useBrainstorm);
+            startResearch(config);
           }}
         />
       )}
@@ -306,7 +306,7 @@ export function CreateArticleFlow({
 interface ConfigStageProps {
   config: GenerationConfig;
   onChange: (config: GenerationConfig) => void;
-  onNext: (useBrainstorm: boolean) => void;
+  onNext: () => void;
 }
 
 function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
@@ -318,7 +318,6 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
   };
 
   const [searchTerms, setSearchTerms] = useState(getInitialSearchTerms);
-  const [useBrainstorm, setUseBrainstorm] = useState(false);
   // Track excluded keywords per industry (industryId -> Set of excluded keywords)
   const [excludedKeywords, setExcludedKeywords] = useState<
     Record<string, Set<string>>
@@ -551,50 +550,6 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
   return (
     <div className="space-y-8">
       <div>
-        {/* Research vs Brainstorm Toggle - Above Search Topics */}
-        <div className="flex flex-col items-end gap-2 mb-4">
-          <label className="text-xs font-medium text-zinc-400">
-            Discovery Method
-          </label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setUseBrainstorm(false)}
-              className={`px-4 py-2 rounded-lg border-2 transition-all text-sm ${
-                !useBrainstorm
-                  ? "border-blue-500 bg-blue-500/10 text-blue-300"
-                  : "border-zinc-800 hover:border-zinc-600 text-zinc-400"
-              }`}
-            >
-              <span className="flex items-center gap-1.5">
-                <span>🔍</span>
-                <span>Research</span>
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setUseBrainstorm(true)}
-              className={`px-4 py-2 rounded-lg border-2 transition-all text-sm ${
-                useBrainstorm
-                  ? "border-blue-500 bg-blue-500/10 text-blue-300"
-                  : "border-zinc-800 hover:border-zinc-600 text-zinc-400"
-              }`}
-            >
-              <span className="flex items-center gap-1.5">
-                <span>💡</span>
-                <span>Brainstorm</span>
-              </span>
-            </button>
-          </div>
-          {useBrainstorm && (
-            <div className="mt-1 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg max-w-xs text-right">
-              <p className="text-xs text-blue-200">
-                💡 <strong>Brainstorm mode</strong> uses AI to generate original
-                article ideas with unique angles.
-              </p>
-            </div>
-          )}
-        </div>
         <h2 className="text-lg font-semibold mb-4">Search Topics</h2>
         <div className="mb-4">
           <input
@@ -768,11 +723,11 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
       </div>
 
       <button
-        onClick={() => onNext(useBrainstorm)}
+        onClick={() => onNext()}
         disabled={!hasSelection}
         className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {useBrainstorm ? "✨ Generate Ideas" : "🔍 Find Topics"} →
+        🔍 Find Topics →
       </button>
     </div>
   );

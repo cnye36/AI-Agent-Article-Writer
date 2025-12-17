@@ -32,10 +32,7 @@ interface UseArticleGenerationReturn {
 
   // Actions
   setConfig: (config: Partial<GenerationConfig>) => void;
-  startResearch: (
-    config: GenerationConfig,
-    useBrainstorm?: boolean
-  ) => Promise<void>;
+  startResearch: (config: GenerationConfig) => Promise<void>;
   selectTopic: (topic: Topic) => Promise<void>;
   rejectTopic: (topicId: string) => Promise<void>;
   generateOutline: () => Promise<void>;
@@ -79,38 +76,23 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
   }, []);
 
   const startResearch = useCallback(
-    async (cfg: GenerationConfig, useBrainstorm: boolean = false) => {
+    async (cfg: GenerationConfig) => {
       setIsLoading(true);
       setError(null);
 
       try {
-        const endpoint = useBrainstorm
-          ? "/api/agents/brainstorm"
-          : "/api/agents/research";
+        const endpoint = "/api/agents/research";
 
-        const requestBody = useBrainstorm
-          ? {
-              ...(cfg.industry && cfg.industry.trim()
-                ? { industry: cfg.industry }
-                : {}),
-              ...(cfg.keywords && cfg.keywords.length > 0
-                ? { keywords: cfg.keywords }
-                : {}),
-              ...(cfg.articleType ? { articleType: cfg.articleType } : {}),
-              targetAudience: "general audience",
-              contentGoals: ["educate", "engage"],
-              count: 5,
-            }
-          : {
-              ...(cfg.industry && cfg.industry.trim()
-                ? { industry: cfg.industry }
-                : {}),
-              ...(cfg.keywords && cfg.keywords.length > 0
-                ? { keywords: cfg.keywords }
-                : {}),
-              ...(cfg.articleType ? { articleType: cfg.articleType } : {}),
-              maxTopics: 5,
-            };
+        const requestBody = {
+          ...(cfg.industry && cfg.industry.trim()
+            ? { industry: cfg.industry }
+            : {}),
+          ...(cfg.keywords && cfg.keywords.length > 0
+            ? { keywords: cfg.keywords }
+            : {}),
+          ...(cfg.articleType ? { articleType: cfg.articleType } : {}),
+          maxTopics: 5,
+        };
 
         const response = await fetch(endpoint, {
           method: "POST",
@@ -120,10 +102,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
 
         if (!response.ok) {
           const data = await response.json();
-          throw new Error(
-            data.error ||
-              `Failed to ${useBrainstorm ? "brainstorm" : "research"} topics`
-          );
+          throw new Error(data.error || "Failed to research topics");
         }
 
         const data = await response.json();
