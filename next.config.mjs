@@ -1,3 +1,7 @@
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
@@ -11,6 +15,19 @@ const nextConfig = {
   webpack: (config, { isServer }) => {
     // Fix for pnpm's nested node_modules structure
     config.resolve.symlinks = false;
+
+    // Fix for eventsource-parser/stream subpath export resolution
+    // This ensures webpack can resolve the /stream subpath export
+    try {
+      const streamPath = require.resolve('eventsource-parser/stream');
+      config.resolve.alias = {
+        ...(config.resolve.alias || {}),
+        'eventsource-parser/stream': streamPath,
+      };
+    } catch (e) {
+      // Fallback if resolution fails - webpack should still try to resolve it
+      console.warn('Could not resolve eventsource-parser/stream:', e);
+    }
 
     // Optimize cache for large strings (reduces serialization warnings)
     if (config.cache) {
