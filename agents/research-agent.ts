@@ -338,60 +338,74 @@ function extractSourcesFromText(text: string, industry: string): Source[] {
   const sources: Source[] = [];
   const urlRegex = /https?:\/\/[^\s\)\]\>]+/g;
   const urls = text.match(urlRegex) || [];
-  
+
   // Try to extract structured information from the text
-  const lines = text.split('\n');
+  const lines = text.split("\n");
   let currentSource: Partial<Source> | null = null;
-  let currentSection = '';
-  
+  let currentSection = "";
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const urlMatch = line.match(urlRegex);
-    
+
     if (urlMatch) {
       // Save previous source if exists
       if (currentSource && currentSource.url) {
         sources.push(currentSource as Source);
       }
-      
+
       // Create new source from URL
-      const url = urlMatch[0].replace(/[.,;!?]+$/, ''); // Remove trailing punctuation
+      const url = urlMatch[0].replace(/[.,;!?]+$/, ""); // Remove trailing punctuation
       currentSource = { url };
       const domainMatch = url.match(/https?:\/\/(?:www\.)?([^\/]+)/);
       if (domainMatch) {
         currentSource.domain = domainMatch[1];
       }
-      
+
       // Try to get title from same or next line
       const nextLine = lines[i + 1]?.trim();
-      if (nextLine && !nextLine.match(urlRegex) && nextLine.length > 10 && nextLine.length < 200) {
-        currentSource.title = nextLine.replace(/^[-*•]\s*/, '');
+      if (
+        nextLine &&
+        !nextLine.match(urlRegex) &&
+        nextLine.length > 10 &&
+        nextLine.length < 200
+      ) {
+        currentSource.title = nextLine.replace(/^[-*•]\s*/, "");
       }
     } else if (currentSource) {
       const trimmed = line.trim();
       if (trimmed && !trimmed.match(urlRegex)) {
-        if (!currentSource.title && trimmed.length > 10 && trimmed.length < 200 && !trimmed.startsWith('http')) {
-          currentSource.title = trimmed.replace(/^[-*•]\s*/, '');
+        if (
+          !currentSource.title &&
+          trimmed.length > 10 &&
+          trimmed.length < 200 &&
+          !trimmed.startsWith("http")
+        ) {
+          currentSource.title = trimmed.replace(/^[-*•]\s*/, "");
         } else if (!currentSource.snippet && trimmed.length > 30) {
           currentSource.snippet = trimmed.substring(0, 300);
         }
       }
-      
+
       // Track section headers for context
-      if (trimmed && trimmed.length < 100 && (trimmed.endsWith(':') || /^#{1,3}\s/.test(trimmed))) {
-        currentSection = trimmed.replace(/^#{1,3}\s*/, '').replace(':', '');
+      if (
+        trimmed &&
+        trimmed.length < 100 &&
+        (trimmed.endsWith(":") || /^#{1,3}\s/.test(trimmed))
+      ) {
+        currentSection = trimmed.replace(/^#{1,3}\s*/, "").replace(":", "");
       }
     }
   }
-  
+
   if (currentSource && currentSource.url) {
     sources.push(currentSource as Source);
   }
-  
+
   // Also add any standalone URLs that weren't captured
   for (const url of urls) {
-    const cleanUrl = url.replace(/[.,;!?]+$/, '');
-    if (!sources.some(s => s.url === cleanUrl)) {
+    const cleanUrl = url.replace(/[.,;!?]+$/, "");
+    if (!sources.some((s) => s.url === cleanUrl)) {
       const domainMatch = cleanUrl.match(/https?:\/\/(?:www\.)?([^\/]+)/);
       sources.push({
         url: cleanUrl,
@@ -400,20 +414,9 @@ function extractSourcesFromText(text: string, industry: string): Source[] {
       });
     }
   }
-  
-  // If no URLs found, create synthetic sources from the content
-  if (sources.length === 0 && text.length > 100) {
-    const paragraphs = text.split('\n\n').filter(p => p.trim().length > 50);
-    paragraphs.slice(0, 5).forEach((para, idx) => {
-      sources.push({
-        url: `https://example.com/${industry}-source-${idx + 1}`,
-        title: para.split('\n')[0].substring(0, 100) || `${industry} information`,
-        snippet: para.substring(0, 200),
-        domain: 'example.com',
-      });
-    });
-  }
-  
+
+  // Do not create synthetic sources - return only real URLs found
+  // This ensures external citations are always from actual research sources
   return sources;
 }
 

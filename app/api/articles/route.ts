@@ -23,18 +23,7 @@ const CreateArticleSchema = z.object({
   outlineId: z.string().uuid().optional(),
 });
 
-const UpdateArticleSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().min(1).max(200).optional(),
-  content: z.string().min(1).optional(),
-  excerpt: z.string().max(300).optional(),
-  status: z.enum(["draft", "review", "published"]).optional(),
-  seoKeywords: z.array(z.string()).optional(),
-  publishedTo: z.array(z.string()).optional(),
-  saveVersion: z.boolean().default(true),
-  editedBy: z.enum(["user", "ai"]).default("user"),
-  changeSummary: z.string().optional(),
-});
+
 
 const SearchArticlesSchema = z.object({
   query: z.string().optional(),
@@ -75,10 +64,14 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
 
-    // Check for single article fetch
+    // Check for single article fetch by ID or slug
     const articleId = searchParams.get("id");
+    const slug = searchParams.get("slug");
     if (articleId) {
-      return getSingleArticle(supabase, articleId);
+      return getSingleArticle(supabase, articleId, "id");
+    }
+    if (slug) {
+      return getSingleArticle(supabase, slug, "slug");
     }
 
     // Parse search parameters
@@ -255,6 +248,7 @@ export async function POST(request: NextRequest) {
       outline_id: outlineId ?? null,
       published_at: status === "published" ? new Date().toISOString() : null,
       published_to: [],
+      cover_image: null,
     };
 
     const { data: article, error: insertError } = await supabase
@@ -263,6 +257,7 @@ export async function POST(request: NextRequest) {
       .select(
         `
         *,
+        metadata,
         industries (
           id,
           name,
@@ -313,6 +308,21 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
+    const UpdateArticleSchema = z.object({
+      id: z.string().uuid(),
+      title: z.string().min(1).max(200).optional(),
+      content: z.string().min(1).optional(),
+      excerpt: z.string().max(300).optional(),
+      status: z.enum(["draft", "review", "published"]).optional(),
+      seoKeywords: z.array(z.string()).optional(),
+      seo_keywords: z.array(z.string()).optional(),
+      publishedTo: z.array(z.string()).optional(),
+      published_to: z.array(z.string()).optional(),
+      cover_image: z.string().optional(),
+      saveVersion: z.boolean().default(true),
+      editedBy: z.enum(["user", "ai"]).default("user"),
+      changeSummary: z.string().optional(),
+    });
     const validationResult = UpdateArticleSchema.safeParse(body);
 
     if (!validationResult.success) {
@@ -329,7 +339,10 @@ export async function PUT(request: NextRequest) {
       excerpt,
       status,
       seoKeywords,
+      seo_keywords,
       publishedTo,
+      published_to,
+      cover_image,
       saveVersion,
       editedBy,
       changeSummary,
@@ -375,14 +388,33 @@ export async function PUT(request: NextRequest) {
       // Set published_at when first published
       if (status === "published" && currentArticle.status !== "published") {
         updateData.published_at = new Date().toISOString();
+        // Generate embedding for published article (async, don't await)
+        import("@/lib/ai/article-embeddings")
+          .then(({ generateArticleEmbedding }) => {
+            generateArticleEmbedding(id).catch((err) => {
+              console.error("Failed to generate article embedding:", err);
+            });
+          })
+          .catch((err) => {
+            console.error("Failed to import article-embeddings:", err);
+          });
       }
     }
 
-    if (seoKeywords !== undefined) {
+    if (cover_image !== undefined) {
+      updateData.cover_image = cover_image;
+    }
+
+    // Handle aliasing for mixed case support
+    if (seo_keywords !== undefined) {
+      updateData.seo_keywords = seo_keywords;
+    } else if (seoKeywords !== undefined) {
       updateData.seo_keywords = seoKeywords;
     }
 
-    if (publishedTo !== undefined) {
+    if (published_to !== undefined) {
+      updateData.published_to = published_to;
+    } else if (publishedTo !== undefined) {
       updateData.published_to = publishedTo;
     }
 
@@ -394,6 +426,7 @@ export async function PUT(request: NextRequest) {
       .select(
         `
         *,
+        metadata,
         industries (
           id,
           name,
@@ -493,16 +526,16 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-// Helper: Get single article with full details
+// Helper: Get single article with full details (by ID or slug)
 async function getSingleArticle(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  id: string
+  identifier: string,
+  type: "id" | "slug" = "id"
 ) {
-  const { data: article, error } = await supabase
-    .from("articles")
-    .select(
-      `
+  let query = supabase.from("articles").select(
+    `
       *,
+      metadata,
       industries (
         id,
         name,
@@ -515,19 +548,27 @@ async function getSingleArticle(
         target_length
       )
     `
-    )
-    .eq("id", id)
-    .single();
+  );
 
-  if (error) {
+  if (type === "slug") {
+    query = query.eq("slug", identifier);
+  } else {
+    query = query.eq("id", identifier);
+  }
+
+  const { data: article, error } = await query.single();
+
+  if (error || !article) {
     return NextResponse.json({ error: "Article not found" }, { status: 404 });
   }
+
+  const articleId = article.id;
 
   // Fetch version history
   const { data: versions } = await supabase
     .from("article_versions")
     .select("id, edited_by, change_summary, created_at")
-    .eq("article_id", id)
+    .eq("article_id", articleId)
     .order("created_at", { ascending: false })
     .limit(10);
 
@@ -544,7 +585,7 @@ async function getSingleArticle(
       )
     `
     )
-    .eq("source_article_id", id);
+    .eq("source_article_id", articleId);
 
   const { data: incomingLinks } = await supabase
     .from("article_links")
@@ -558,15 +599,29 @@ async function getSingleArticle(
       )
     `
     )
-    .eq("target_article_id", id);
+    .eq("target_article_id", articleId);
+
+  // Fetch article images
+  const { data: images } = await supabase
+    .from("article_images")
+    .select("*")
+    .eq("article_id", articleId)
+    .order("created_at", { ascending: false });
+
+  // Ensure metadata is included in response
+  const articleWithMetadata = {
+    ...article,
+    metadata: article.metadata || {},
+  };
 
   return NextResponse.json({
-    article,
+    article: articleWithMetadata,
     versions,
     links: {
       outgoing: outgoingLinks,
       incoming: incomingLinks,
     },
+    images,
   });
 }
 

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createWriterAgent } from "@/agents/writer-agent";
 import { JobQueue } from "@/lib/job-queue";
 import { processArticleWritingJob } from "@/lib/workers/article-writer-worker";
+import { generateEmbeddingForContent } from "@/lib/ai/article-embeddings";
 import { z } from "zod";
 import type { Article, WriteArticleJobInput } from "@/types";
 
@@ -39,7 +40,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { outlineId, customInstructions, useBackgroundJob } = validationResult.data;
+    const { outlineId, customInstructions, useBackgroundJob } =
+      validationResult.data;
 
     // If useBackgroundJob is true, create a job and return immediately
     if (useBackgroundJob) {
@@ -121,32 +123,104 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch related articles for internal linking
-    const { data: relatedArticles } = await supabase
+    // Fetch related articles for internal linking (only published articles)
+    // 1. Industry-based articles
+    const { data: industryArticles } = await supabase
       .from("articles")
       .select("id, title, slug, excerpt")
       .eq("industry_id", industryId)
       .eq("status", "published")
-      .limit(15);
+      .limit(10);
 
-    // Build link map from outline suggestions (for future use in writer agent)
-    buildLinkMap(outline.structure, relatedArticles || []);
+    // 2. Embedding-based similar articles (if we have published articles with embeddings)
+    let similarArticles: Array<{
+      id: string;
+      title: string;
+      slug: string;
+      excerpt: string | null;
+    }> = [];
+    try {
+      // Generate embedding from outline to find similar published articles
+      const outlineText = [
+        outline.structure.title,
+        outline.structure.hook || "",
+        outline.structure.sections?.map((s: any) => s.title || "").join(" ") ||
+          "",
+      ]
+        .filter((text) => text && text.trim().length > 0)
+        .join("\n\n");
+
+      if (outlineText.trim()) {
+        const queryEmbedding = await generateEmbeddingForContent(
+          outline.structure.title,
+          null,
+          outlineText
+        );
+
+        // Use database function to find similar articles
+        const { data: similarData } = await supabase.rpc(
+          "find_similar_published_articles",
+          {
+            query_embedding: queryEmbedding,
+            similarity_threshold: 0.7, // Lower threshold for new articles
+            match_count: 5,
+            exclude_article_id: null,
+          }
+        );
+
+        if (similarData) {
+          similarArticles = similarData.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            slug: item.slug,
+            excerpt: item.excerpt,
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Error finding similar articles via embeddings:", error);
+      // Continue without embedding-based suggestions
+    }
+
+    // Combine and deduplicate articles
+    const allRelatedArticles = [
+      ...(industryArticles || []),
+      ...similarArticles,
+    ];
+    const uniqueArticles = Array.from(
+      new Map(allRelatedArticles.map((a) => [a.id, a])).values()
+    );
+
+    // Build allowed internal links from outline suggestions + published articles
+    // Only include links where we have a matching published article with a slug
+    const allowedInternalLinks = buildAllowedInternalLinks(
+      outline.structure,
+      uniqueArticles
+    );
 
     // Initialize and run the writer agent
     const writerAgent = createWriterAgent();
 
-    // Prepare writer agent input (without linkMap as it's not part of the state)
+    // Prepare writer agent input with allowed internal links
     const writerInput = {
       outline: outline.structure,
       articleType: outline.article_type,
       tone: outline.tone,
       sources: outline.topics.sources || [],
+      allowedInternalLinks,
       currentSection: 0,
       sections: [],
       customInstructions,
     };
 
     const result = await writerAgent.invoke(writerInput);
+
+    // Post-process: Ensure at least 2 external source links exist
+    const processedResult = ensureExternalSourceLinks(
+      { fullArticle: result.fullArticle },
+      outline.topics.sources || []
+    );
+    result.fullArticle = processedResult.fullArticle;
 
     // Generate slug from title
     const slug = generateSlug(outline.structure.title);
@@ -155,10 +229,10 @@ export async function POST(request: NextRequest) {
     const wordCount = countWords(result.fullArticle);
     const readingTime = Math.ceil(wordCount / 200); // ~200 words per minute
 
-    // Extract internal links from the article
+    // Extract internal links from the article (now using /blog/<slug> format)
     const internalLinks = extractInternalLinks(
       result.fullArticle,
-      relatedArticles || []
+      uniqueArticles
     );
 
     // Convert markdown to HTML
@@ -187,6 +261,7 @@ export async function POST(request: NextRequest) {
           word_count: wordCount,
           reading_time: readingTime,
           seo_keywords: outline.structure.seoKeywords || [],
+          cover_image: (result as any).coverImage || null,
         } as any)
         .select()
         .single();
@@ -401,6 +476,72 @@ export async function PUT(request: NextRequest) {
     const { streamWriteHook, streamWriteSection, streamWriteConclusion } =
       await import("@/lib/ai/streaming-writer");
 
+    // Fetch related articles for internal linking (only published articles)
+    const industryId = outline.topics?.industry_id;
+
+    // 1. Industry-based articles
+    const { data: industryArticles } = industryId
+      ? await supabase
+          .from("articles")
+          .select("id, title, slug, excerpt")
+          .eq("industry_id", industryId)
+          .eq("status", "published")
+          .limit(10)
+      : { data: [] };
+
+    // 2. Embedding-based similar articles
+    let similarArticles: Array<{
+      id: string;
+      title: string;
+      slug: string;
+      excerpt: string | null;
+    }> = [];
+    try {
+      const outlineText = [
+        outline.structure.title,
+        outline.structure.hook || "",
+        outline.structure.sections?.map((s: any) => s.title || "").join(" ") ||
+          "",
+      ]
+        .filter((text) => text && text.trim().length > 0)
+        .join("\n\n");
+
+      if (outlineText.trim()) {
+        const queryEmbedding = await generateEmbeddingForContent(
+          outline.structure.title,
+          null,
+          outlineText
+        );
+
+        const { data: similarData } = await supabase.rpc(
+          "find_similar_published_articles",
+          {
+            query_embedding: queryEmbedding,
+            similarity_threshold: 0.7,
+            match_count: 5,
+            exclude_article_id: null,
+          }
+        );
+
+        if (similarData) {
+          similarArticles = similarData.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            slug: item.slug,
+            excerpt: item.excerpt,
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Error finding similar articles via embeddings:", error);
+    }
+
+    // Combine and deduplicate
+    const relatedArticles = [...(industryArticles || []), ...similarArticles];
+    const uniqueRelatedArticles = Array.from(
+      new Map(relatedArticles.map((a) => [a.id, a])).values()
+    );
+
     // Create article placeholder first so we have an ID to navigate to
     const slug = generateSlug(outline.structure.title);
     const { data: placeholderArticleData, error: placeholderError } =
@@ -528,12 +669,19 @@ export async function PUT(request: NextRequest) {
             );
 
             let sectionContent = "";
+            // Build allowed internal links for this section
+            const sectionAllowedLinks = buildAllowedInternalLinks(
+              { sections: [section] },
+              uniqueRelatedArticles
+            );
+
             const sectionGenerator = streamWriteSection(section, {
               articleTitle: outline.structure.title,
               articleType: outline.article_type,
               tone: outline.tone,
               previousSections: sections,
               sources: outline.topics?.sources || [],
+              allowedInternalLinks: sectionAllowedLinks,
               sectionIndex: i,
               totalSections,
             });
@@ -629,7 +777,14 @@ export async function PUT(request: NextRequest) {
 
           fullArticle += conclusionContent;
 
-          // 4. Update article with final content
+          // 4. Ensure external source links exist (post-processing)
+          const articleWithSources = ensureExternalSourceLinks(
+            { fullArticle },
+            outline.topics?.sources || []
+          );
+          fullArticle = articleWithSources.fullArticle;
+
+          // 5. Update article with final content
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
@@ -749,26 +904,89 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// Helper function to build link map from outline suggestions
-function buildLinkMap(
-  structure: { sections?: Array<{ suggestedLinks?: Array<{ articleId: string; anchorText: string }> }> },
+// Helper function to build allowed internal links from outline suggestions
+// Only includes links to published articles with valid slugs
+function buildAllowedInternalLinks(
+  structure: {
+    sections?: Array<{
+      suggestedLinks?: Array<{ articleId: string; anchorText: string }>;
+    }>;
+  },
   relatedArticles: Array<{ id: string; slug: string; title: string }>
-): Map<string, { url: string; title: string }> {
-  const linkMap = new Map();
+): Array<{ anchorText: string; url: string; title: string }> {
+  const allowedLinks: Array<{
+    anchorText: string;
+    url: string;
+    title: string;
+  }> = [];
+  const seenUrls = new Set<string>();
 
   for (const section of structure.sections || []) {
     for (const link of section.suggestedLinks || []) {
       const article = relatedArticles.find((a) => a.id === link.articleId);
-      if (article) {
-        linkMap.set(link.anchorText.toLowerCase(), {
-          url: `/articles/${article.slug}`,
-          title: article.title,
-        });
+      if (article && article.slug) {
+        // Use /blog/<slug> format as requested
+        const url = `/blog/${article.slug}`;
+        // Avoid duplicates
+        if (!seenUrls.has(url)) {
+          allowedLinks.push({
+            anchorText: link.anchorText,
+            url,
+            title: article.title,
+          });
+          seenUrls.add(url);
+        }
       }
     }
   }
 
-  return linkMap;
+  return allowedLinks;
+}
+
+// Helper function to ensure at least 2 external source links exist
+// If fewer than 2 are found, append a Sources section with links from research
+function ensureExternalSourceLinks(
+  result: { fullArticle: string },
+  sources: Array<{ url: string; title?: string }>
+): { fullArticle: string } {
+  if (sources.length === 0) {
+    return result; // Can't add sources if none provided
+  }
+
+  // Extract all external links from the article (http/https URLs)
+  const externalLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+  const foundLinks = new Set<string>();
+  let match;
+  while ((match = externalLinkRegex.exec(result.fullArticle)) !== null) {
+    foundLinks.add(match[2]);
+  }
+
+  // If we have at least 2 external links that match our sources, we're good
+  const sourceUrls = new Set(sources.map((s) => s.url));
+  const matchingLinks = Array.from(foundLinks).filter((url) =>
+    sourceUrls.has(url)
+  );
+
+  if (matchingLinks.length >= 2) {
+    return result; // Already has enough source links
+  }
+
+  // Need to add more - append a Sources section
+  const sourcesToAdd = sources
+    .filter((s) => s.url && !matchingLinks.includes(s.url))
+    .slice(0, Math.max(2 - matchingLinks.length, 2));
+
+  if (sourcesToAdd.length === 0) {
+    return result; // No additional sources to add
+  }
+
+  const sourcesSection = `\n\n## Sources\n\n${sourcesToAdd
+    .map((s) => `- [${s.title || s.url}](${s.url})`)
+    .join("\n")}`;
+
+  return {
+    fullArticle: result.fullArticle + sourcesSection,
+  };
 }
 
 // Helper function to generate URL slug
@@ -789,14 +1007,15 @@ function countWords(text: string): number {
 }
 
 // Helper function to extract internal links
+// Now supports both /blog/<slug> (new format) and /articles/<slug> (legacy)
 function extractInternalLinks(
   content: string,
   relatedArticles: Array<{ id: string; slug: string }>
 ): { targetId: string; anchorText: string; context: string }[] {
   const links: { targetId: string; anchorText: string; context: string }[] = [];
 
-  // Match markdown links [text](/articles/slug)
-  const linkRegex = /\[([^\]]+)\]\(\/articles\/([^)]+)\)/g;
+  // Match markdown links [text](/blog/slug) or [text](/articles/slug) for backward compatibility
+  const linkRegex = /\[([^\]]+)\]\(\/(?:blog|articles)\/([^)]+)\)/g;
   let match;
 
   while ((match = linkRegex.exec(content)) !== null) {

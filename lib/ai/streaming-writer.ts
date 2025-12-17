@@ -1,6 +1,12 @@
 import { openai } from "./openai";
 import type { ArticleType, Source } from "@/types";
 
+export interface AllowedInternalLink {
+  anchorText: string;
+  url: string;
+  title: string;
+}
+
 export interface SectionToWrite {
   heading: string;
   keyPoints: string[];
@@ -26,6 +32,7 @@ export async function* streamWriteSection(
     tone: string;
     previousSections: string[];
     sources: Source[];
+    allowedInternalLinks?: AllowedInternalLink[];
     sectionIndex: number;
     totalSections: number;
   }
@@ -38,24 +45,60 @@ Writing Guidelines:
 1. Match the tone and style to the article type (${context.articleType})
 2. Use the outline as your structure - don't deviate
 3. Incorporate sources naturally with proper attribution
-4. Include internal links using the suggested anchor text
-5. Write engaging, scannable content with varied sentence structure
-6. Use concrete examples and data points
-7. Avoid fluff - every sentence should add value
+4. Include internal links ONLY from the provided AllowedInternalLinks list - DO NOT invent URLs or slugs
+5. Add at least 2 external links from the provided Sources list
+6. Write engaging, scannable content with varied sentence structure
+7. Use concrete examples and data points
+8. Avoid fluff - every sentence should add value
+9. STRICTLY FORBIDDEN: Do not use em dashes (—). Use commas, parentheses, or colons instead.
 
 Tone: ${context.tone}
 
-You're writing section ${context.sectionIndex + 1} of ${context.totalSections} for the article "${context.articleTitle}".
+You're writing section ${context.sectionIndex + 1} of ${
+    context.totalSections
+  } for the article "${context.articleTitle}".
 Follow the key points in the outline, hit the word target (approximately), and transition smoothly from the previous section.`;
 
-  const userPrompt = `${previousContext ? `Previous sections for context:\n${previousContext}\n\n` : ""}Now write this section:
+  const allowedInternalLinksText =
+    context.allowedInternalLinks && context.allowedInternalLinks.length > 0
+      ? `\n\nAllowed Internal Links (ONLY use these - do not invent any):\n${context.allowedInternalLinks
+          .map(
+            (link, i) =>
+              `${i + 1}. Anchor: "${link.anchorText}" → URL: ${
+                link.url
+              } (Article: ${link.title})`
+          )
+          .join("\n")}`
+      : "\n\nNo internal links are available. Do not create any internal links in this section.";
+
+  const sourcesText =
+    context.sources.length > 0
+      ? `\n\nAvailable Sources (MUST use these URLs for external links - at least 2 required):\n${context.sources
+          .map((s, i) => `${i + 1}. ${s.title || s.url}\n   URL: ${s.url}`)
+          .join("\n")}`
+      : "\n\nWARNING: No sources provided. You must still write the section, but cannot add external links.";
+
+  const userPrompt = `${
+    previousContext
+      ? `Previous sections for context:\n${previousContext}\n\n`
+      : ""
+  }Now write this section:
 
 Heading: ${section.heading}
 Key Points: ${section.keyPoints.join(", ")}
-Word Target: ${section.wordTarget} words
-${section.suggestedLinks && section.suggestedLinks.length > 0 ? `Suggested Links: ${JSON.stringify(section.suggestedLinks)}` : ""}
+Word Target: ${
+    section.wordTarget
+  } words${allowedInternalLinksText}${sourcesText}
 
-Write the complete section content now. Start with the heading as a markdown heading (## ${section.heading}), then write the content.`;
+CRITICAL REQUIREMENTS:
+- Add at least 2 external links using URLs from the Sources list above
+- Only use internal links from the AllowedInternalLinks list (if any)
+- Do not invent or create any links that are not explicitly provided
+- Use markdown format: [link text](URL)
+
+Write the complete section content now. Start with the heading as a markdown heading (## ${
+    section.heading
+  }), then write the content.`;
 
   let fullContent = "";
   let tokenCount = 0;
@@ -100,7 +143,9 @@ Write the complete section content now. Start with the heading as a markdown hea
   } catch (error) {
     console.error("Error streaming section:", error);
     throw new Error(
-      `Failed to write section: ${error instanceof Error ? error.message : "Unknown error"}`
+      `Failed to write section: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
     );
   }
 }

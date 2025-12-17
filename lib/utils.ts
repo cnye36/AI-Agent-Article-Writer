@@ -75,6 +75,33 @@ export function markdownToHtml(markdown: string): string {
 // Format date for display
 export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === "string" ? new Date(date) : date;
+  
+  // If dateStyle or timeStyle are provided, use Intl.DateTimeFormat
+  // These options are not supported by toLocaleString/toLocaleDateString
+  if (options && ("dateStyle" in options || "timeStyle" in options)) {
+    try {
+      const formatter = new Intl.DateTimeFormat("en-US", options);
+      return formatter.format(d);
+    } catch (error) {
+      // Fallback if dateStyle/timeStyle not supported
+      // Convert to equivalent individual options
+      const fallbackOptions: Intl.DateTimeFormatOptions = {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      };
+      
+      if ("timeStyle" in options && options.timeStyle) {
+        fallbackOptions.hour = "numeric";
+        fallbackOptions.minute = "2-digit";
+      }
+      
+      const formatter = new Intl.DateTimeFormat("en-US", fallbackOptions);
+      return formatter.format(d);
+    }
+  }
+  
+  // Otherwise use toLocaleDateString for date-only formatting
   return d.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",

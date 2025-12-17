@@ -98,6 +98,7 @@ export function createOrchestrator() {
           content: result.fullArticle,
           outline_id: null,
           slug: "",
+          cover_image: null,
           content_html: null,
           excerpt: null,
           industry_id: "",

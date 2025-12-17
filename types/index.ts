@@ -112,6 +112,11 @@ export interface Article {
   seo_keywords: string[];
   published_at: string | null;
   published_to: string[];
+  cover_image: string | null;
+  metadata?: {
+    frontmatter?: any; // Frontmatter overrides
+    [key: string]: any;
+  };
   created_at: string;
   updated_at: string;
   // Joined
@@ -138,6 +143,37 @@ export interface ArticleVersion {
   edited_by: "user" | "ai";
   change_summary: string | null;
   created_at: string;
+}
+
+export interface ArticleImage {
+  id: string;
+  article_id: string;
+  url: string;
+  prompt: string | null;
+  is_cover: boolean;
+  created_at: string;
+}
+
+export interface PublishingSite {
+  id: string;
+  user_id: string;
+  name: string;
+  base_path: string; // e.g., "https://example.com/blog"
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ArticlePublication {
+  id: string;
+  article_id: string;
+  site_id: string;
+  slug: string;
+  canonical_url?: string; // Computed in app: base_path + / + slug
+  published_at: string;
+  created_at: string;
+  // Joined
+  site?: PublishingSite;
+  article?: Pick<Article, "id" | "title" | "slug">;
 }
 
 // API Request/Response Types
@@ -465,6 +501,11 @@ export interface Database {
           completed_at?: string;
         };
         Update: Partial<Omit<Job, "id" | "created_at">>;
+      };
+      article_images: {
+        Row: ArticleImage;
+        Insert: Omit<ArticleImage, "id" | "created_at">;
+        Update: Partial<Omit<ArticleImage, "id">>;
       };
     };
   };
