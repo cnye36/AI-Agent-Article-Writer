@@ -86,6 +86,12 @@ A powerful AI-powered content creation platform that helps you research, outline
    # Anthropic
    ANTHROPIC_API_KEY=your_anthropic_api_key
    
+   # Stripe
+   STRIPE_SECRET_KEY=sk_test_your_key
+   STRIPE_PRICE_ID=price_your_plan
+   # Optional: where to send users after closing the billing portal
+   STRIPE_BILLING_PORTAL_RETURN_URL=http://localhost:3000/dashboard
+   
    # Optional: For web search in research agent
    TAVILY_API_KEY=your_tavily_api_key
    ```
