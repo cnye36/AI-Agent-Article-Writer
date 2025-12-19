@@ -355,8 +355,12 @@ function BillingSection({ user }: { user: SupabaseUser | null }) {
     userMetadata.subscription_status ||
     "inactive"
   ) as string;
-  const stripeCustomerId =
+  const rawStripeCustomerId =
     appMetadata.stripe_customer_id || userMetadata.stripe_customer_id;
+  const stripeCustomerId =
+    typeof rawStripeCustomerId === "string" && rawStripeCustomerId.length > 0
+      ? rawStripeCustomerId
+      : undefined;
 
   const normalizedStatus = subscriptionStatus.toLowerCase();
   const hasActiveSubscription = ["active", "trialing", "past_due"].includes(
