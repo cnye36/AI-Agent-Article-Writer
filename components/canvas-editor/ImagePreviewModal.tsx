@@ -90,10 +90,13 @@ export function ImagePreviewModal({
         >
           {src.startsWith("data:") ? (
             // Use regular img tag for data URLs as Next.js Image can have issues
-            <img
+            <Image
               src={src}
               alt={alt}
-              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              fill
+              className="object-contain rounded-lg shadow-2xl"
+              unoptimized
+              sizes="(max-width: 1280px) 100vw, 1280px"
             />
           ) : (
             <div className="relative w-full h-full max-w-full max-h-[90vh]">
@@ -115,10 +118,7 @@ export function ImagePreviewModal({
             className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-zinc-900/90 backdrop-blur-sm rounded-lg px-4 py-2 border border-zinc-700 max-w-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <p
-              className="text-sm text-zinc-300 truncate"
-              title={alt}
-            >
+            <p className="text-sm text-zinc-300 truncate" title={alt}>
               {alt}
             </p>
           </div>
@@ -127,6 +127,8 @@ export function ImagePreviewModal({
     </div>
   );
 }
+
+
 
 
 

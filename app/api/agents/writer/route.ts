@@ -202,6 +202,11 @@ export async function POST(request: NextRequest) {
     const writerAgent = createWriterAgent();
 
     // Prepare writer agent input with allowed internal links
+    const effectiveCustomInstructions =
+      customInstructions ||
+      (outline as any)?.structure?.metadata?.customInstructions ||
+      undefined;
+
     const writerInput = {
       outline: outline.structure,
       articleType: outline.article_type,
@@ -210,7 +215,7 @@ export async function POST(request: NextRequest) {
       allowedInternalLinks,
       currentSection: 0,
       sections: [],
-      customInstructions,
+      customInstructions: effectiveCustomInstructions,
     };
 
     const result = await writerAgent.invoke(writerInput);
@@ -473,6 +478,8 @@ export async function PUT(request: NextRequest) {
     }
 
     const outline = outlineData as any;
+    const effectiveCustomInstructions =
+      outline?.structure?.metadata?.customInstructions || undefined;
     const { streamWriteHook, streamWriteSection, streamWriteConclusion } =
       await import("@/lib/ai/streaming-writer");
 
@@ -620,7 +627,8 @@ export async function PUT(request: NextRequest) {
             outline.structure.title,
             outline.structure.hook,
             outline.article_type,
-            outline.tone
+            outline.tone,
+            effectiveCustomInstructions
           )) {
             hookContent += token;
             fullArticle = `# ${outline.structure.title}\n\n${hookContent}\n\n`;
@@ -684,6 +692,7 @@ export async function PUT(request: NextRequest) {
               allowedInternalLinks: sectionAllowedLinks,
               sectionIndex: i,
               totalSections,
+              customInstructions: effectiveCustomInstructions,
             });
 
             for await (const token of sectionGenerator) {
@@ -750,7 +759,8 @@ export async function PUT(request: NextRequest) {
             outline.structure.title,
             outline.article_type,
             outline.tone,
-            fullArticle
+            fullArticle,
+            effectiveCustomInstructions
           )) {
             conclusionContent += token;
             const currentFullArticle = `${fullArticle}${conclusionContent}`;

@@ -84,7 +84,7 @@ export function ArticleFrontmatterSection({
     await onUpdate({
       metadata: {
         ...currentMetadata,
-        frontmatter: frontmatterData,
+        frontmatter: frontmatterData as unknown as Record<string, unknown>,
       },
     } as Partial<Article>);
     setIsEditing(false);
@@ -100,25 +100,25 @@ export function ArticleFrontmatterSection({
   };
 
   return (
-    <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+    <section className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Frontmatter</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Frontmatter</h2>
         <div className="flex gap-2">
           <button
             onClick={handleGenerate}
-            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-sm"
+            className="px-3 py-1.5 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded text-sm text-slate-900 dark:text-white"
           >
             Generate
           </button>
           <button
             onClick={handleCopyYAML}
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm"
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm text-white"
           >
             Copy YAML
           </button>
           <button
             onClick={() => setIsEditing(!isEditing)}
-            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-sm"
+            className="px-3 py-1.5 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded text-sm text-slate-900 dark:text-white"
           >
             {isEditing ? "Cancel" : "Edit"}
           </button>
@@ -128,19 +128,19 @@ export function ArticleFrontmatterSection({
       {isEditing ? (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-zinc-400 mb-1">Title</label>
+            <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">Title</label>
             <input
               type="text"
               value={frontmatterData.title}
               onChange={(e) =>
                 setFrontmatterData({ ...frontmatterData, title: e.target.value })
               }
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-zinc-400 mb-1">
+            <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">
               Description
             </label>
             <textarea
@@ -152,13 +152,13 @@ export function ArticleFrontmatterSection({
                 })
               }
               rows={3}
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-zinc-400 mb-1">Date</label>
+              <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">Date</label>
               <input
                 type="date"
                 value={frontmatterData.date}
@@ -168,12 +168,12 @@ export function ArticleFrontmatterSection({
                     date: e.target.value,
                   })
                 }
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
 
             <div>
-              <label className="block text-sm text-zinc-400 mb-1">Author</label>
+              <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">Author</label>
               <input
                 type="text"
                 value={frontmatterData.author}
@@ -183,13 +183,13 @@ export function ArticleFrontmatterSection({
                     author: e.target.value,
                   })
                 }
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-zinc-400 mb-1">
+            <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">
               Categories (one per line)
             </label>
             <textarea
@@ -203,12 +203,12 @@ export function ArticleFrontmatterSection({
                 })
               }
               rows={3}
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded text-sm text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-zinc-400 mb-1">
+            <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">
               Tags (one per line)
             </label>
             <textarea
@@ -222,16 +222,16 @@ export function ArticleFrontmatterSection({
                 })
               }
               rows={3}
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded text-sm text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
             />
           </div>
 
           {frontmatterData.featuredImage && (
             <div className="space-y-2">
-              <label className="block text-sm text-zinc-400">Featured Image</label>
+              <label className="block text-sm text-slate-700 dark:text-zinc-400">Featured Image</label>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs text-zinc-500 mb-1">Source</label>
+                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">Source</label>
                   <input
                     type="text"
                     value={frontmatterData.featuredImage.src}
@@ -244,11 +244,11 @@ export function ArticleFrontmatterSection({
                         },
                       })
                     }
-                    className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-2 py-1.5 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-zinc-500 mb-1">Alt Text</label>
+                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">Alt Text</label>
                   <input
                     type="text"
                     value={frontmatterData.featuredImage.alt}
@@ -261,11 +261,11 @@ export function ArticleFrontmatterSection({
                         },
                       })
                     }
-                    className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-2 py-1.5 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-zinc-500 mb-1">Width</label>
+                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">Width</label>
                   <input
                     type="number"
                     value={frontmatterData.featuredImage.width || 1024}
@@ -278,11 +278,11 @@ export function ArticleFrontmatterSection({
                         },
                       })
                     }
-                    className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-2 py-1.5 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-zinc-500 mb-1">Height</label>
+                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">Height</label>
                   <input
                     type="number"
                     value={frontmatterData.featuredImage.height || 768}
@@ -295,7 +295,7 @@ export function ArticleFrontmatterSection({
                         },
                       })
                     }
-                    className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-2 py-1.5 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -305,13 +305,13 @@ export function ArticleFrontmatterSection({
           <div className="flex gap-2 pt-2">
             <button
               onClick={handleSave}
-              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium"
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium text-white"
             >
               Save Changes
             </button>
             <button
               onClick={() => setIsEditing(false)}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded text-sm"
+              className="px-4 py-2 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded text-sm text-slate-900 dark:text-white"
             >
               Cancel
             </button>
@@ -319,8 +319,8 @@ export function ArticleFrontmatterSection({
         </div>
       ) : (
         <div>
-          <label className="block text-sm text-zinc-400 mb-2">YAML Preview</label>
-          <pre className="p-4 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 font-mono overflow-x-auto max-h-96 overflow-y-auto">
+          <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-2">YAML Preview</label>
+          <pre className="p-4 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg text-xs text-slate-800 dark:text-zinc-300 font-mono overflow-x-auto max-h-96 overflow-y-auto">
             {yamlPreview}
           </pre>
         </div>

@@ -17,6 +17,7 @@ const CreateArticleSchema = z.object({
     "tutorial",
     "listicle",
     "affiliate",
+    "personal",
   ]),
   status: z.enum(["draft", "review", "published"]).default("draft"),
   seoKeywords: z.array(z.string()).optional(),
@@ -37,6 +38,7 @@ const SearchArticlesSchema = z.object({
       "tutorial",
       "listicle",
       "affiliate",
+      "personal",
     ])
     .optional(),
   status: z.enum(["draft", "review", "published"]).optional(),

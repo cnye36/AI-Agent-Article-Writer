@@ -16,6 +16,7 @@ const ResearchRequestSchema = z.object({
     "tutorial",
     "listicle",
     "affiliate",
+    "personal",
   ]).optional(),
   maxTopics: z.number().min(1).max(20).default(5),
 }).refine(

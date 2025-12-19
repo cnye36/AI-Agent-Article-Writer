@@ -23,8 +23,8 @@ export function ImageLibrary({
 
   return (
     <div className="mb-4">
-      <label className="block text-xs text-zinc-500 mb-2">Image Library</label>
-      <p className="text-xs text-zinc-400 mb-2">
+      <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-2">Image Library</label>
+      <p className="text-xs text-slate-600 dark:text-zinc-400 mb-2">
         Click to view larger, right-click to set as cover
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -32,10 +32,10 @@ export function ImageLibrary({
           <div
             key={img.id}
             className={cn(
-              "relative aspect-video rounded-lg overflow-hidden border cursor-pointer hover:border-blue-500 transition-colors group",
+              "relative aspect-video rounded-lg overflow-hidden border cursor-pointer hover:border-blue-500 dark:hover:border-blue-500 transition-colors group bg-slate-100 dark:bg-zinc-900",
               article.cover_image === img.url
-                ? "border-blue-500 ring-1 ring-blue-500"
-                : "border-zinc-800"
+                ? "border-blue-500 dark:border-blue-500 ring-1 ring-blue-500"
+                : "border-slate-300 dark:border-zinc-800"
             )}
             onClick={() => onImageClick(img)}
             onContextMenu={(e) => {
@@ -61,7 +61,7 @@ export function ImageLibrary({
                   e.stopPropagation();
                   onImageClick(img);
                 }}
-                className="p-1.5 bg-zinc-800/90 hover:bg-zinc-700 rounded text-white text-xs"
+                className="p-1.5 bg-slate-800/90 dark:bg-zinc-800/90 hover:bg-slate-700 dark:hover:bg-zinc-700 rounded text-white text-xs"
                 title="View larger"
               >
                 🔍

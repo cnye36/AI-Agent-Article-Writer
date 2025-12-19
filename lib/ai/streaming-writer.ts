@@ -35,6 +35,7 @@ export async function* streamWriteSection(
     allowedInternalLinks?: AllowedInternalLink[];
     sectionIndex: number;
     totalSections: number;
+    customInstructions?: string;
   }
 ): AsyncGenerator<string, StreamingSectionResult> {
   const previousContext = context.previousSections.slice(-2).join("\n\n");
@@ -58,6 +59,10 @@ You're writing section ${context.sectionIndex + 1} of ${
     context.totalSections
   } for the article "${context.articleTitle}".
 Follow the key points in the outline, hit the word target (approximately), and transition smoothly from the previous section.`;
+
+  const customInstructionsText = context.customInstructions?.trim()
+    ? `\n\nCustom Instructions (MUST follow):\n${context.customInstructions.trim()}`
+    : "";
 
   const allowedInternalLinksText =
     context.allowedInternalLinks && context.allowedInternalLinks.length > 0
@@ -89,6 +94,7 @@ Key Points: ${section.keyPoints.join(", ")}
 Word Target: ${
     section.wordTarget
   } words${allowedInternalLinksText}${sourcesText}
+${customInstructionsText}
 
 CRITICAL REQUIREMENTS:
 - Add at least 2 external links using URLs from the Sources list above
@@ -157,7 +163,8 @@ export async function* streamWriteHook(
   title: string,
   hook: string,
   articleType: ArticleType,
-  tone: string
+  tone: string,
+  customInstructions?: string
 ): AsyncGenerator<string, string> {
   const systemPrompt = `You are an expert content writer. Write an engaging article introduction that hooks the reader.
 
@@ -170,10 +177,15 @@ The hook should be 2-3 paragraphs that:
 3. Hint at what the article will cover
 4. Make the reader want to continue`;
 
+  const customInstructionsText = customInstructions?.trim()
+    ? `\n\nCustom Instructions (MUST follow):\n${customInstructions.trim()}`
+    : "";
+
   const userPrompt = `Write the introduction/hook for this article:
 
 Title: ${title}
 Hook Brief: ${hook}
+${customInstructionsText}
 
 Write the complete introduction now. DO NOT include the title - just the hook paragraphs.`;
 
@@ -216,7 +228,8 @@ export async function* streamWriteConclusion(
   articleTitle: string,
   articleType: ArticleType,
   tone: string,
-  fullArticleSoFar: string
+  fullArticleSoFar: string,
+  customInstructions?: string
 ): AsyncGenerator<string, string> {
   const systemPrompt = `You are an expert content writer. Write a compelling article conclusion.
 
@@ -229,11 +242,16 @@ The conclusion should:
 3. End with a strong call-to-action
 4. Leave the reader feeling informed and motivated`;
 
+  const customInstructionsText = customInstructions?.trim()
+    ? `\n\nCustom Instructions (MUST follow):\n${customInstructions.trim()}`
+    : "";
+
   const userPrompt = `Write the conclusion for this article:
 
 Title: ${articleTitle}
 Conclusion Brief: ${conclusion.summary}
 Call to Action: ${conclusion.callToAction}
+${customInstructionsText}
 
 Article content so far:
 ${fullArticleSoFar.substring(0, 1000)}... [truncated]

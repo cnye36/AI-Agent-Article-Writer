@@ -25,9 +25,9 @@ export function ImageLibrary({
   if (images.length === 0) return null;
 
   return (
-    <div className="mt-6 pt-6 border-t border-zinc-800">
-      <h4 className="text-sm font-medium text-white mb-3">Image Library</h4>
-      <p className="text-xs text-zinc-500 mb-3">
+    <div className="mt-6 pt-6 border-t border-slate-200 dark:border-zinc-800">
+      <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-3">Image Library</h4>
+      <p className="text-xs text-slate-600 dark:text-zinc-500 mb-3">
         Click to view • Hover to download • Drag to insert • Right-click to set as cover
       </p>
       <div className="grid grid-cols-2 gap-2">
@@ -35,10 +35,10 @@ export function ImageLibrary({
           <div
             key={img.id}
             className={cn(
-              "relative aspect-video rounded-lg overflow-hidden border cursor-pointer hover:border-zinc-600 transition-colors bg-zinc-900 group",
+              "relative aspect-video rounded-lg overflow-hidden border cursor-pointer hover:border-blue-400 dark:hover:border-zinc-600 transition-colors bg-slate-100 dark:bg-zinc-900 group",
               img.is_cover
-                ? "border-blue-500 ring-1 ring-blue-500"
-                : "border-zinc-800"
+                ? "border-blue-500 dark:border-blue-500 ring-1 ring-blue-500"
+                : "border-slate-300 dark:border-zinc-800"
             )}
             draggable="true"
             onDragStart={(e) => {
@@ -125,6 +125,8 @@ export function ImageLibrary({
     </div>
   );
 }
+
+
 
 
 

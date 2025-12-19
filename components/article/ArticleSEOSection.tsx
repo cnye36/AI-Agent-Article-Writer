@@ -12,13 +12,13 @@ export function ArticleSEOSection({
   onUpdate,
 }: ArticleSEOSectionProps) {
   return (
-    <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-      <h2 className="text-lg font-semibold mb-4">SEO Keywords</h2>
+    <section className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6">
+      <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">SEO Keywords</h2>
       <div className="flex flex-wrap gap-2 mb-4">
         {article.seo_keywords.map((keyword, index) => (
           <span
             key={index}
-            className="px-3 py-1 bg-zinc-800 rounded-full text-sm flex items-center gap-2"
+            className="px-3 py-1 bg-slate-100 dark:bg-zinc-800 rounded-full text-sm flex items-center gap-2 text-slate-900 dark:text-white"
           >
             {keyword}
             <button
@@ -28,7 +28,7 @@ export function ArticleSEOSection({
                 );
                 onUpdate({ seo_keywords: newKeywords });
               }}
-              className="text-zinc-500 hover:text-red-400"
+              className="text-slate-500 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400"
             >
               ×
             </button>
@@ -38,7 +38,7 @@ export function ArticleSEOSection({
       <input
         type="text"
         placeholder="Add keyword and press Enter..."
-        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2"
+        className="w-full bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded-lg px-4 py-2 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500"
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             const input = e.target as HTMLInputElement;

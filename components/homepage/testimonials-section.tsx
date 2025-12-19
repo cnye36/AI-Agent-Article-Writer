@@ -2,6 +2,7 @@
 
 import { Star, Quote } from "lucide-react";
 import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 
 const testimonials = [
   {
@@ -61,33 +62,90 @@ const testimonials = [
 ];
 
 const stats = [
-  { value: "10,000+", label: "Articles Published" },
-  { value: "500+", label: "Active Users" },
-  { value: "4.9/5", label: "Average Rating" },
-  { value: "250%", label: "Traffic Increase" },
+  { value: "10,000+", label: "Articles Published", target: 10000, suffix: "+" },
+  { value: "500+", label: "Active Users", target: 500, suffix: "+" },
+  { value: "4.9/5", label: "Average Rating", target: 4.9, decimals: 1, suffix: "/5" },
+  { value: "250%", label: "Traffic Increase", target: 250, suffix: "%" },
 ];
+
+// Counter animation component
+function CountUpStat({ target, decimals = 0, suffix = "", label }: { target: number; decimals?: number; suffix?: string; label: string }) {
+  const [count, setCount] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+        }
+      },
+      { threshold: 0.3 }
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible) return;
+
+    const duration = 2000; // 2 seconds
+    const steps = 60;
+    const increment = target / steps;
+    let current = 0;
+
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= target) {
+        setCount(target);
+        clearInterval(timer);
+      } else {
+        setCount(current);
+      }
+    }, duration / steps);
+
+    return () => clearInterval(timer);
+  }, [isVisible, target]);
+
+  return (
+    <div ref={ref} className="text-center">
+      <div className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
+        {count.toLocaleString(undefined, {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals
+        })}{suffix}
+      </div>
+      <div className="text-sm text-slate-600 dark:text-zinc-400">{label}</div>
+    </div>
+  );
+}
 
 export function TestimonialsSection() {
   return (
-    <section className="py-24 bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 relative overflow-hidden">
+    <section className="py-24 bg-gradient-to-b from-white via-slate-50 to-white dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 relative overflow-hidden">
       {/* Background effects */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,_var(--tw-gradient-stops))] from-blue-900/10 via-transparent to-transparent" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,_var(--tw-gradient-stops))] from-blue-500/5 dark:from-blue-900/10 via-transparent to-transparent" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section header */}
         <div className="text-center space-y-4 mb-16">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-sm font-medium">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 text-sm font-medium">
             <Star className="w-4 h-4 fill-current" />
             Loved by Content Creators
           </div>
-          <h2 className="text-4xl sm:text-5xl font-bold text-white">
+          <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white">
             What Our Users Say
             <br />
-            <span className="bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-yellow-500 to-orange-500 dark:from-yellow-400 dark:to-orange-400 bg-clip-text text-transparent">
               About Their Results
             </span>
           </h2>
-          <p className="max-w-2xl mx-auto text-lg text-zinc-400">
+          <p className="max-w-2xl mx-auto text-lg text-slate-600 dark:text-zinc-400">
             Join thousands of content creators who are publishing better content faster.
           </p>
         </div>
@@ -95,12 +153,13 @@ export function TestimonialsSection() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-16">
           {stats.map((stat, i) => (
-            <div key={i} className="text-center">
-              <div className="text-4xl font-bold text-white mb-2">
-                {stat.value}
-              </div>
-              <div className="text-sm text-zinc-400">{stat.label}</div>
-            </div>
+            <CountUpStat
+              key={i}
+              target={stat.target}
+              decimals={stat.decimals}
+              suffix={stat.suffix}
+              label={stat.label}
+            />
           ))}
         </div>
 
@@ -109,23 +168,23 @@ export function TestimonialsSection() {
           {testimonials.map((testimonial, i) => (
             <div
               key={i}
-              className="group relative bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-xl p-6 hover:border-zinc-700 transition-all hover:shadow-lg hover:shadow-blue-500/5"
+              className="group relative bg-white dark:bg-gradient-to-b dark:from-zinc-900 dark:to-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 hover:border-slate-300 dark:hover:border-zinc-700 transition-all hover:shadow-lg hover:shadow-blue-500/10 dark:hover:shadow-blue-500/5"
             >
               {/* Quote icon */}
-              <Quote className="absolute top-4 right-4 w-8 h-8 text-zinc-800" />
+              <Quote className="absolute top-4 right-4 w-8 h-8 text-slate-200 dark:text-zinc-800" />
 
               {/* Rating */}
               <div className="flex gap-1 mb-4">
                 {[...Array(testimonial.rating)].map((_, j) => (
                   <Star
                     key={j}
-                    className="w-4 h-4 text-yellow-400 fill-current"
+                    className="w-4 h-4 text-yellow-500 dark:text-yellow-400 fill-current"
                   />
                 ))}
               </div>
 
               {/* Testimonial text */}
-              <p className="text-zinc-300 text-sm leading-relaxed mb-6">
+              <p className="text-slate-700 dark:text-zinc-300 text-sm leading-relaxed mb-6">
                 &ldquo;{testimonial.text}&rdquo;
               </p>
 
@@ -137,10 +196,10 @@ export function TestimonialsSection() {
                   {testimonial.avatar}
                 </div>
                 <div>
-                  <div className="text-white font-medium text-sm">
+                  <div className="text-slate-900 dark:text-white font-medium text-sm">
                     {testimonial.name}
                   </div>
-                  <div className="text-zinc-500 text-xs">
+                  <div className="text-slate-500 dark:text-zinc-500 text-xs">
                     {testimonial.role} • {testimonial.company}
                   </div>
                 </div>

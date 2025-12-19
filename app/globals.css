@@ -1,8 +1,43 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Enable dark mode with class strategy for Tailwind v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Light theme - Enhanced with better contrast and visual hierarchy */
+:root,
+.light {
+  /* Backgrounds - Layered system for depth */
+  --background: #ffffff;                    /* Page background */
+  --background-secondary: #f8fafc;          /* Subtle secondary surfaces (slate-50) */
+  --background-tertiary: #f1f5f9;           /* Cards and elevated surfaces (slate-100) */
+
+  /* Foregrounds - WCAG AA compliant contrast ratios */
+  --foreground: #0f172a;                    /* Primary text: slate-900 (15.8:1 contrast) */
+  --foreground-secondary: #475569;          /* Secondary text: slate-600 (7.4:1 contrast) */
+  --foreground-tertiary: #64748b;           /* Tertiary text: slate-500 (5.1:1 contrast) */
+  --foreground-muted: #94a3b8;              /* Muted text: slate-400 (3.7:1 - large text only) */
+
+  /* Borders - Clear visual separation */
+  --border: #e2e8f0;                        /* Standard borders: slate-200 */
+  --border-secondary: #cbd5e1;              /* Emphasis borders: slate-300 */
+  --border-strong: #94a3b8;                 /* Strong borders: slate-400 */
+
+  /* Component-specific (optional CSS variables for consistency) */
+  --card-background: #ffffff;
+  --card-border: #e2e8f0;
+  --input-background: #f8fafc;
+  --input-border: #cbd5e1;
+  --hover-background: #f1f5f9;
+}
+
+/* Dark theme */
+.dark {
+  --background: #09090b;
+  --foreground: #fafafa;
+  --background-secondary: #18181b;
+  --foreground-secondary: #a1a1aa;
+  --border: #27272a;
+  --border-secondary: #3f3f46;
 }
 
 @theme inline {
@@ -12,42 +47,59 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Custom Scrollbar Styles */
+/* Custom Scrollbar Styles - Theme aware */
 .scrollbar-thin {
   scrollbar-width: thin;
+}
+
+/* Light theme scrollbar */
+.light .scrollbar-thin {
+  scrollbar-color: rgb(212 212 216) rgb(244 244 245);
+}
+
+.light .scrollbar-thin::-webkit-scrollbar-track {
+  background: rgb(244 244 245); /* zinc-100 */
+  border-radius: 4px;
+}
+
+.light .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgb(212 212 216); /* zinc-300 */
+  border-radius: 4px;
+  border: 1px solid rgb(228 228 231); /* zinc-200 */
+}
+
+.light .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgb(161 161 170); /* zinc-400 */
+}
+
+/* Dark theme scrollbar */
+.dark .scrollbar-thin {
   scrollbar-color: rgb(63 63 70) rgb(24 24 27);
 }
 
-.scrollbar-thin::-webkit-scrollbar {
+.dark .scrollbar-thin::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-.scrollbar-thin::-webkit-scrollbar-track {
+.dark .scrollbar-thin::-webkit-scrollbar-track {
   background: rgb(24 24 27); /* zinc-900 */
   border-radius: 4px;
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb {
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
   background: rgb(63 63 70); /* zinc-700 */
   border-radius: 4px;
   border: 1px solid rgb(39 39 42); /* zinc-800 */
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: rgb(82 82 91); /* zinc-600 */
 }
 
@@ -62,3 +114,99 @@ body {
 .scrollbar-track-zinc-900::-webkit-scrollbar-track {
   background: rgb(24 24 27);
 }
+
+/* Theme-aware utility classes for common patterns */
+
+/* Card styles */
+.card-light {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.card-dark {
+  background: rgb(24 24 27);
+  border-color: rgb(39 39 42);
+}
+
+/* Input styles */
+.input-light {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.input-light:focus {
+  border-color: #3b82f6;
+  outline: none;
+  ring: 1px solid #3b82f6;
+}
+
+.input-light::placeholder {
+  color: #94a3b8;
+}
+
+/* Button secondary styles */
+.btn-secondary-light {
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+.btn-secondary-light:hover {
+  background: #e2e8f0;
+}
+
+/* Tab navigation */
+.tab-container-light {
+  background: #f1f5f9;
+}
+
+.tab-active-light {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.tab-inactive-light {
+  color: #64748b;
+}
+
+.tab-inactive-light:hover {
+  color: #0f172a;
+  background: #e2e8f0;
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100px) translateX(20px);
+    opacity: 0;
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+

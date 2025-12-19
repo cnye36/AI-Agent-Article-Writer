@@ -271,7 +271,7 @@ export function getStatusConfig(status: string): { label: string; color: string 
     published: { label: "Published", color: "bg-green-600" },
     pending: { label: "Pending", color: "bg-blue-600" },
     approved: { label: "Ready", color: "bg-green-600" },
-    rejected: { label: "Rejected", color: "bg-red-600" },
+    rejected: { label: "Archived", color: "bg-zinc-700" },
     used: { label: "Used", color: "bg-purple-600" },
   };
   return configs[status] || { label: capitalize(status), color: "bg-zinc-600" };

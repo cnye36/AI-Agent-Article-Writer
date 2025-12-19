@@ -1,8 +1,12 @@
 /* TipTap Editor Styles - Matches final article output */
 
 .editor-content {
-  color: #e4e4e7;
+  color: #475569;
   line-height: 1.75;
+}
+
+.dark .editor-content {
+  color: #e4e4e7;
 }
 
 /* Headings */
@@ -12,8 +16,12 @@
   line-height: 2.5rem;
   margin-top: 0;
   margin-bottom: 1.5rem;
-  color: #ffffff;
+  color: #0f172a;
   letter-spacing: -0.025em;
+}
+
+.dark .editor-content h1 {
+  color: #ffffff;
 }
 
 .editor-content h2 {
@@ -22,10 +30,15 @@
   line-height: 2.25rem;
   margin-top: 2rem;
   margin-bottom: 1rem;
-  color: #ffffff;
+  color: #0f172a;
   letter-spacing: -0.025em;
-  border-bottom: 1px solid #3f3f46;
+  border-bottom: 1px solid #cbd5e1;
   padding-bottom: 0.5rem;
+}
+
+.dark .editor-content h2 {
+  color: #ffffff;
+  border-bottom-color: #3f3f46;
 }
 
 .editor-content h3 {
@@ -34,6 +47,10 @@
   line-height: 2rem;
   margin-top: 1.5rem;
   margin-bottom: 0.75rem;
+  color: #1e293b;
+}
+
+.dark .editor-content h3 {
   color: #f4f4f5;
 }
 
@@ -43,6 +60,10 @@
   line-height: 1.75rem;
   margin-top: 1.25rem;
   margin-bottom: 0.5rem;
+  color: #1e293b;
+}
+
+.dark .editor-content h4 {
   color: #f4f4f5;
 }
 
@@ -50,8 +71,12 @@
 .editor-content p {
   margin-top: 1.25rem;
   margin-bottom: 1.25rem;
-  color: #d4d4d8;
+  color: #475569;
   line-height: 1.75;
+}
+
+.dark .editor-content p {
+  color: #d4d4d8;
 }
 
 .editor-content p:first-of-type {
@@ -76,6 +101,11 @@
   margin-top: 1.25rem;
   margin-bottom: 1.25rem;
   padding-left: 1.75rem;
+  color: #475569;
+}
+
+.dark .editor-content ul,
+.dark .editor-content ol {
   color: #d4d4d8;
 }
 
@@ -99,44 +129,70 @@
   padding-left: 1.5rem;
   margin: 1.5rem 0;
   font-style: italic;
+  color: #64748b;
+}
+
+.dark .editor-content blockquote {
   color: #a1a1aa;
 }
 
 /* Code */
 .editor-content code {
-  background-color: #27272a;
-  color: #f4f4f5;
+  background-color: #f1f5f9;
+  color: #0f172a;
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
+.dark .editor-content code {
+  background-color: #27272a;
+  color: #f4f4f5;
+}
+
 .editor-content pre {
-  background-color: #18181b;
-  border: 1px solid #3f3f46;
+  background-color: #f8fafc;
+  border: 1px solid #cbd5e1;
   border-radius: 0.5rem;
   padding: 1rem;
   overflow-x: auto;
   margin: 1.5rem 0;
 }
 
+.dark .editor-content pre {
+  background-color: #18181b;
+  border-color: #3f3f46;
+}
+
 .editor-content pre code {
   background-color: transparent;
   padding: 0;
+  color: #0f172a;
+}
+
+.dark .editor-content pre code {
   color: #f4f4f5;
 }
 
 /* Horizontal Rule */
 .editor-content hr {
   border: none;
-  border-top: 1px solid #3f3f46;
+  border-top: 1px solid #cbd5e1;
   margin: 2rem 0;
+}
+
+.dark .editor-content hr {
+  border-top-color: #3f3f46;
 }
 
 /* Strong/Bold */
 .editor-content strong {
   font-weight: 700;
+  color: #0f172a;
+}
+
+.dark .editor-content strong {
   color: #ffffff;
 }
 

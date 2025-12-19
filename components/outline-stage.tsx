@@ -65,13 +65,13 @@ export function OutlineStage({
     }, 1000); // Poll every second
 
     return () => clearInterval(interval);
-  }, [outline?.id, isLoading, onOutlineUpdate]);
+  }, [outline?.id, isLoading, outline, onOutlineUpdate]);
 
   if (isLoading && !localOutline) {
     return (
       <div className="text-center py-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-zinc-400">Creating outline...</p>
+        <p className="text-slate-600 dark:text-zinc-400">Creating outline...</p>
       </div>
     );
   }
@@ -79,10 +79,12 @@ export function OutlineStage({
   if (!localOutline || !localOutline.structure) {
     return (
       <div className="text-center py-12">
-        <p className="text-zinc-400 mb-4">No outline available.</p>
+        <p className="text-slate-600 dark:text-zinc-400 mb-4">
+          No outline available.
+        </p>
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg"
+          className="px-4 py-2 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg text-slate-900 dark:text-white"
         >
           Go Back
         </button>
@@ -153,10 +155,12 @@ export function OutlineStage({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">Article Outline</h2>
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+          Article Outline
+        </h2>
         <button
           onClick={onBack}
-          className="px-4 py-2 text-zinc-400 hover:text-white"
+          className="px-4 py-2 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
         >
           ← Back
         </button>
@@ -164,12 +168,14 @@ export function OutlineStage({
 
       {/* Show generating indicator */}
       {isGenerating && (
-        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+        <div className="p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded-xl">
           <div className="flex items-center gap-3">
             <div className="animate-pulse">✍️</div>
             <div className="flex-1">
-              <p className="text-blue-400 font-medium">Generating outline...</p>
-              <p className="text-xs text-zinc-500 mt-1">
+              <p className="text-blue-700 dark:text-blue-400 font-medium">
+                Generating outline...
+              </p>
+              <p className="text-xs text-blue-600 dark:text-zinc-500 mt-1">
                 Sections will appear as they&apos;re created
               </p>
             </div>
@@ -177,19 +183,19 @@ export function OutlineStage({
         </div>
       )}
 
-      <div className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/50">
-        <h3 className="text-2xl font-bold mb-4">
+      <div className="p-6 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50">
+        <h3 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">
           {structure.title === "Generating..." ? (
-            <div className="h-8 bg-zinc-800 rounded animate-pulse" />
+            <div className="h-8 bg-slate-200 dark:bg-zinc-800 rounded animate-pulse" />
           ) : (
             structure.title
           )}
         </h3>
-        <div className="text-zinc-300 mb-6">
+        <div className="text-slate-700 dark:text-zinc-300 mb-6">
           {!structure.hook || structure.hook === "" ? (
             <div className="space-y-2">
-              <div className="h-4 bg-zinc-800 rounded animate-pulse" />
-              <div className="h-4 bg-zinc-800 rounded animate-pulse w-3/4" />
+              <div className="h-4 bg-slate-200 dark:bg-zinc-800 rounded animate-pulse" />
+              <div className="h-4 bg-slate-200 dark:bg-zinc-800 rounded animate-pulse w-3/4" />
             </div>
           ) : (
             structure.hook
@@ -208,14 +214,14 @@ export function OutlineStage({
                     <h4 className="font-semibold text-lg mb-2">
                       {section.heading}
                     </h4>
-                    <ul className="list-disc list-inside space-y-1 text-zinc-400 mb-2">
+                    <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-zinc-400 mb-2">
                       {section.keyPoints.map((point, i) => (
                         <li key={i} className="text-sm">
                           {point}
                         </li>
                       ))}
                     </ul>
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-xs text-slate-500 dark:text-zinc-500">
                       Target: ~{section.wordTarget} words
                     </p>
                   </div>
@@ -225,7 +231,7 @@ export function OutlineStage({
                         editingSectionIndex === index ? null : index
                       )
                     }
-                    className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-xs bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg text-slate-700 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
                     title="Edit this section"
                   >
                     ✏️ Edit
@@ -234,15 +240,15 @@ export function OutlineStage({
 
                 {/* Edit Input */}
                 {editingSectionIndex === index && (
-                  <div className="mt-4 p-4 bg-zinc-800 rounded-lg border border-zinc-700">
-                    <label className="block text-sm text-zinc-400 mb-2">
+                  <div className="mt-4 p-4 bg-slate-50 dark:bg-zinc-800 rounded-lg border border-slate-200 dark:border-zinc-700">
+                    <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-2">
                       What do you want to change?
                     </label>
                     <textarea
                       value={editPrompt}
                       onChange={(e) => setEditPrompt(e.target.value)}
                       placeholder="E.g., 'Make this section more technical' or 'Add more examples'"
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                      className="w-full bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
                       rows={3}
                     />
                     <div className="flex gap-2">
@@ -259,7 +265,7 @@ export function OutlineStage({
                           setEditPrompt("");
                         }}
                         disabled={isRewriting}
-                        className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 bg-slate-200 dark:bg-zinc-700 hover:bg-slate-300 dark:hover:bg-zinc-600 rounded-lg text-sm text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Cancel
                       </button>
@@ -272,12 +278,15 @@ export function OutlineStage({
             // Skeleton loaders for sections while generating
             <div className="space-y-6">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="border-l-2 border-zinc-700 pl-4">
+                <div
+                  key={i}
+                  className="border-l-2 border-slate-300 dark:border-zinc-700 pl-4"
+                >
                   <div className="space-y-3 animate-pulse">
-                    <div className="h-6 bg-zinc-800 rounded w-1/3" />
-                    <div className="h-4 bg-zinc-800 rounded w-full" />
-                    <div className="h-4 bg-zinc-800 rounded w-5/6" />
-                    <div className="h-3 bg-zinc-800 rounded w-1/4" />
+                    <div className="h-6 bg-slate-200 dark:bg-zinc-800 rounded w-1/3" />
+                    <div className="h-4 bg-slate-200 dark:bg-zinc-800 rounded w-full" />
+                    <div className="h-4 bg-slate-200 dark:bg-zinc-800 rounded w-5/6" />
+                    <div className="h-3 bg-slate-200 dark:bg-zinc-800 rounded w-1/4" />
                   </div>
                 </div>
               ))}
@@ -285,20 +294,22 @@ export function OutlineStage({
           )}
         </div>
 
-        <div className="mt-6 pt-6 border-t border-zinc-800">
-          <h4 className="font-semibold mb-2">Conclusion</h4>
+        <div className="mt-6 pt-6 border-t border-slate-200 dark:border-zinc-800">
+          <h4 className="font-semibold mb-2 text-slate-900 dark:text-white">
+            Conclusion
+          </h4>
           {!structure.conclusion?.summary ||
           structure.conclusion.summary === "" ? (
             <div className="space-y-2 animate-pulse">
-              <div className="h-4 bg-zinc-800 rounded w-full" />
-              <div className="h-4 bg-zinc-800 rounded w-4/5" />
+              <div className="h-4 bg-slate-200 dark:bg-zinc-800 rounded w-full" />
+              <div className="h-4 bg-slate-200 dark:bg-zinc-800 rounded w-4/5" />
             </div>
           ) : (
             <>
-              <p className="text-zinc-300 mb-2">
+              <p className="text-slate-700 dark:text-zinc-300 mb-2">
                 {structure.conclusion.summary}
               </p>
-              <p className="text-zinc-400 text-sm">
+              <p className="text-slate-600 dark:text-zinc-400 text-sm">
                 {structure.conclusion.callToAction}
               </p>
             </>
@@ -310,7 +321,7 @@ export function OutlineStage({
             {structure.seoKeywords.map((keyword, i) => (
               <span
                 key={i}
-                className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-400"
+                className="px-2 py-1 bg-slate-100 dark:bg-zinc-800 rounded text-xs text-slate-700 dark:text-zinc-400"
               >
                 {keyword}
               </span>
@@ -322,14 +333,14 @@ export function OutlineStage({
       <div className="flex gap-4">
         <button
           onClick={onBack}
-          className="flex-1 px-4 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl"
+          className="flex-1 px-4 py-3 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-xl text-slate-900 dark:text-white"
         >
           ← Back to Topics
         </button>
         {onSelectDifferentTopic && (
           <button
             onClick={onSelectDifferentTopic}
-            className="px-4 py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl"
+            className="px-4 py-3 bg-slate-200 dark:bg-zinc-700 hover:bg-slate-300 dark:hover:bg-zinc-600 rounded-xl text-slate-900 dark:text-white"
           >
             Choose Different Topic
           </button>

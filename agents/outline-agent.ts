@@ -71,13 +71,23 @@ const outlineAgentPrompt = `You are an expert content strategist and outline arc
   - news: Factual, timely, objective reporting. Use inverted pyramid structure (most important info first).
   - opinion: Persuasive, well-argued, clear stance. Include counterarguments and rebuttals.
   - tutorial: Step-by-step, actionable, beginner-friendly. Each section is a numbered step with clear instructions.
+  - personal: First-person experience/journey. Use a narrative arc (setup → experiment → results → takeaways). Include specific steps/workflow and concrete outcomes.
   - listicle: **CRITICAL**: MUST be a numbered list format. Each section heading MUST start with a number (e.g., "1. [Item Name]", "2. [Item Name]"). The title should match this format (e.g., "11 AI Tools..."). Each numbered item is a separate section. Make it scannable and engaging.
   - affiliate: Comparison and recommendation articles. Include pros/cons sections, comparison tables, and clear recommendations.
   
   Target Length: {targetLength}
-  - short: ~500 words (3-4 sections for blog/news, 5-7 items for listicle)
-  - medium: ~1000 words (5-6 sections for blog/news, 8-12 items for listicle)
-  - long: ~2000+ words (7-10 sections for blog/news, 15+ items for listicle)
+  
+  Optimal word counts by article type:
+  - Blog/Affiliate/Personal (medium): ~1,500 words (5-6 sections for blog/personal, 8-12 items for listicle)
+  - Technical/Tutorial (long): ~2,500+ words (7-10 sections, comprehensive guides)
+  - News (short): ~600 words (3-4 sections, concise reporting)
+  - Opinion (short): ~900 words (4-6 sections, focused argument)
+  - Listicle (long): ~1,800 words (8-12 items, scannable format)
+  
+  Section counts by length:
+  - short: 3-4 sections for blog/news, 5-7 items for listicle
+  - medium: 5-6 sections for blog/news, 8-12 items for listicle
+  - long: 7-10 sections for blog/news, 15+ items for listicle
   
   Tone: {tone}
   

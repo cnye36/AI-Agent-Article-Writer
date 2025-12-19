@@ -153,7 +153,7 @@ export function tiptapToMarkdown(
   }
 
   // Process all top-level nodes
-  markdown = processedDoc.content.map(processNode).join("");
+  markdown = processedDoc.content?.map(processNode).join("") || "";
 
   // Clean up extra newlines
   markdown = markdown.replace(/\n{3,}/g, "\n\n").trim();

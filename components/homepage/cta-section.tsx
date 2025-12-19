@@ -5,7 +5,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 
 export function CTASection() {
   return (
-    <section className="py-24 bg-zinc-950 relative overflow-hidden">
+    <section className="py-24 bg-white dark:bg-zinc-950 relative overflow-hidden">
       {/* Background effects */}
       <div className="absolute inset-0 bg-gradient-to-r from-blue-900/20 via-purple-900/20 to-pink-900/20" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-500/10 via-transparent to-transparent" />
@@ -15,7 +15,7 @@ export function CTASection() {
       <div className="absolute top-1/2 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse delay-700" />
 
       <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="relative bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 rounded-3xl p-12 md:p-16 text-center space-y-8 overflow-hidden">
+        <div className="relative bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-900 dark:to-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-12 md:p-16 text-center space-y-8 overflow-hidden">
           {/* Decorative elements */}
           <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50" />
           <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-purple-500 to-transparent opacity-50" />
@@ -27,7 +27,7 @@ export function CTASection() {
           </div>
 
           {/* Heading */}
-          <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white tracking-tight">
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold text-zinc-900 dark:text-white tracking-tight">
             Ready to Create Content
             <br />
             <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
@@ -36,7 +36,7 @@ export function CTASection() {
           </h2>
 
           {/* Description */}
-          <p className="max-w-2xl mx-auto text-xl text-zinc-400 leading-relaxed">
+          <p className="max-w-2xl mx-auto text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed">
             Join thousands of content creators who are publishing better content
             faster with AI-powered writing agents.
           </p>
@@ -52,7 +52,7 @@ export function CTASection() {
             </Link>
             <Link
               href="#pricing"
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition-all border border-zinc-700"
+              className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-lg bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white font-semibold transition-all border border-zinc-300 dark:border-zinc-700"
             >
               View Pricing
             </Link>

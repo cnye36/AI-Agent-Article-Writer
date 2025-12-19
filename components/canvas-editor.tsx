@@ -34,6 +34,7 @@ interface CanvasEditorProps {
   }>;
   onSetCoverImage?: (imageId: string) => Promise<void>;
   onImagesChange?: () => void;
+  onGenerateCoverImageComplete?: () => void;
 }
 
 export function CanvasEditor({
@@ -48,6 +49,7 @@ export function CanvasEditor({
   images = [],
   onSetCoverImage,
   onImagesChange,
+  onGenerateCoverImageComplete,
 }: CanvasEditorProps) {
   const [selectedText, setSelectedText] = useState("");
   const [aiPanelOpen, setAiPanelOpen] = useState(true); // Visible by default on desktop
@@ -702,8 +704,12 @@ export function CanvasEditor({
     setAiAssistantTab("image");
     if (onGenerateCoverImage) {
       await onGenerateCoverImage();
+      // Refresh images after cover image generation
+      if (onGenerateCoverImageComplete) {
+        await onGenerateCoverImageComplete();
+      }
     }
-  }, [onGenerateCoverImage]);
+  }, [onGenerateCoverImage, onGenerateCoverImageComplete]);
 
   return (
     <div className="flex flex-col lg:flex-row h-full relative">
@@ -757,7 +763,7 @@ export function CanvasEditor({
                 <textarea
                   value={markdownContent}
                   onChange={(e) => handleMarkdownChange(e.target.value)}
-                  className={`w-full min-h-[400px] sm:min-h-[500px] lg:min-h-[600px] bg-zinc-900 border border-zinc-800 rounded-lg p-4 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${
+                  className={`w-full min-h-[400px] sm:min-h-[500px] lg:min-h-[600px] bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 rounded-lg p-4 text-slate-900 dark:text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${
                     showMarkdown ? "" : "hidden"
                   }`}
                   placeholder="Write your markdown here..."
@@ -798,12 +804,12 @@ export function CanvasEditor({
 
       {/* AI Assistant Panel - Mobile/Tablet: Drawer from right, Desktop: Fixed Sidebar */}
       <div
-        className={`fixed top-0 right-0 bottom-0 lg:top-[64px] lg:bottom-0 z-50 transition-transform duration-300 ${
+        className={`fixed top-0 right-0 bottom-0 lg:top-[160px] lg:bottom-0 z-50 transition-transform duration-300 ${
           aiPanelOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
         <div
-          className={`w-full sm:w-80 lg:w-96 h-full border-l border-zinc-800 bg-zinc-950 flex flex-col overflow-hidden`}
+          className={`w-full sm:w-80 lg:w-96 h-full border-l border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex flex-col overflow-hidden`}
         >
           <AIAssistantPanel
             selectedText={selectedText}

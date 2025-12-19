@@ -6,7 +6,8 @@ export type ArticleType =
   | "opinion"
   | "tutorial"
   | "listicle"
-  | "affiliate";
+  | "affiliate"
+  | "personal";
 export type ArticleStatus = "draft" | "review" | "published";
 export type TopicStatus = "pending" | "approved" | "rejected" | "used";
 export type TargetLength = "short" | "medium" | "long";
@@ -114,8 +115,8 @@ export interface Article {
   published_to: string[];
   cover_image: string | null;
   metadata?: {
-    frontmatter?: any; // Frontmatter overrides
-    [key: string]: any;
+    frontmatter?: Record<string, unknown>; // Frontmatter overrides
+    [key: string]: unknown;
   };
   created_at: string;
   updated_at: string;
@@ -299,6 +300,22 @@ export interface GenerationConfig {
   articleType: ArticleType;
   targetLength: TargetLength;
   tone: string;
+  /**
+   * How the user wants to define the topic:
+   * - discover: use industry/keywords to discover topics
+   * - direct: user provides an explicit topic/product set
+   */
+  topicMode?: "discover" | "direct";
+  /**
+   * Direct topic input (tutorial subject, affiliate product(s), personal premise, etc).
+   * For affiliate comparisons, users can provide a comma-separated list of products.
+   */
+  topicQuery?: string;
+  /**
+   * Extra instructions/brief to guide the outline + writing agents.
+   * For personal pieces, this should include the story/experience details.
+   */
+  customInstructions?: string;
 }
 
 // UI Component Types

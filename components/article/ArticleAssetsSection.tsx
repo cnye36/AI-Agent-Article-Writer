@@ -26,12 +26,12 @@ export function ArticleAssetsSection({
   onImageClick,
 }: ArticleAssetsSectionProps) {
   return (
-    <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-      <h2 className="text-lg font-semibold mb-4">Assets</h2>
+    <section className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6">
+      <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">Assets</h2>
       <div>
-        <label className="block text-sm text-zinc-400 mb-2">Cover Image</label>
+        <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-2">Cover Image</label>
         {article.cover_image ? (
-          <div className="relative w-full max-w-md aspect-video rounded-lg overflow-hidden border border-zinc-700 mb-3 group">
+          <div className="relative w-full max-w-md aspect-video rounded-lg overflow-hidden border border-slate-300 dark:border-zinc-700 mb-3 group">
             <Image
               src={article.cover_image}
               alt="Cover"
@@ -42,7 +42,7 @@ export function ArticleAssetsSection({
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
               <button
                 onClick={() => window.open(article.cover_image!, "_blank")}
-                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-xs text-white"
+                className="px-3 py-1.5 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded text-xs text-slate-900 dark:text-white"
               >
                 View
               </button>
@@ -72,7 +72,7 @@ export function ArticleAssetsSection({
             </div>
           </div>
         ) : (
-          <div className="w-full max-w-md aspect-video bg-zinc-800/50 rounded-lg border border-zinc-800 border-dashed flex items-center justify-center text-zinc-500 text-sm mb-3">
+          <div className="w-full max-w-md aspect-video bg-slate-50 dark:bg-zinc-800/50 rounded-lg border border-slate-300 dark:border-zinc-800 border-dashed flex items-center justify-center text-slate-500 dark:text-zinc-500 text-sm mb-3">
             No cover image selected
           </div>
         )}
@@ -88,11 +88,11 @@ export function ArticleAssetsSection({
         <button
           onClick={onGenerateCoverImage}
           disabled={isGeneratingImage}
-          className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm flex items-center gap-2 transition-colors disabled:opacity-50"
+          className="px-4 py-2 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg text-sm flex items-center gap-2 transition-colors disabled:opacity-50 text-slate-900 dark:text-white"
         >
           {isGeneratingImage ? (
             <>
-              <div className="animate-spin rounded-full h-4 w-4 border-2 border-zinc-400 border-t-transparent" />
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-600 dark:border-zinc-400 border-t-transparent" />
               <span>Generating...</span>
             </>
           ) : (

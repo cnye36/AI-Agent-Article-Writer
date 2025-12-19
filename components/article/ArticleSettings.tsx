@@ -48,7 +48,7 @@ export function ArticleSettings({
   onDelete,
 }: ArticleSettingsProps) {
   return (
-    <div className="h-full overflow-y-auto p-8">
+    <div className="h-full overflow-y-auto p-8 bg-white dark:bg-zinc-950">
       <div className="max-w-2xl mx-auto space-y-8">
         <ArticleInfoSection article={article} onUpdate={onUpdate} />
         <ArticleAssetsSection

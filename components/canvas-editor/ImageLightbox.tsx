@@ -104,10 +104,13 @@ export function ImageLightbox({
         >
           {selectedImage.url.startsWith("data:") ? (
             // Use regular img tag for data URLs as Next.js Image can have issues
-            <img
+            <Image
               src={selectedImage.url}
               alt={selectedImage.prompt || "Generated Image"}
-              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              fill
+              className="object-contain rounded-lg shadow-2xl"
+              unoptimized
+              sizes="(max-width: 1280px) 100vw, 1280px"
             />
           ) : (
             <div className="relative w-full h-full max-w-full max-h-[90vh]">

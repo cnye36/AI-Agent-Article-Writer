@@ -49,6 +49,7 @@ const initialConfig: GenerationConfig = {
   articleType: "blog",
   targetLength: "medium",
   tone: "professional",
+  topicMode: "discover",
 };
 
 export function useArticleGeneration(): UseArticleGenerationReturn {
@@ -83,15 +84,32 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
       try {
         const endpoint = "/api/agents/research";
 
+        const parseCommaList = (value: string): string[] =>
+          value
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+
+        const effectiveKeywords =
+          cfg.topicMode === "direct"
+            ? cfg.topicQuery?.trim()
+              ? parseCommaList(cfg.topicQuery)
+              : cfg.customInstructions?.trim()
+              ? // Fallback: use first line of the brief as a seed query
+                [cfg.customInstructions.split("\n")[0]!.trim()].filter(Boolean)
+              : cfg.keywords
+            : cfg.keywords;
+
         const requestBody = {
           ...(cfg.industry && cfg.industry.trim()
             ? { industry: cfg.industry }
             : {}),
-          ...(cfg.keywords && cfg.keywords.length > 0
-            ? { keywords: cfg.keywords }
+          ...(effectiveKeywords && effectiveKeywords.length > 0
+            ? { keywords: effectiveKeywords }
             : {}),
           ...(cfg.articleType ? { articleType: cfg.articleType } : {}),
-          maxTopics: 5,
+          // For "direct" mode we want a single best-fit topic backed by sources
+          maxTopics: cfg.topicMode === "direct" ? 1 : 5,
         };
 
         const response = await fetch(endpoint, {
@@ -153,6 +171,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
             articleType: config.articleType,
             targetLength: config.targetLength,
             tone: config.tone,
+            customInstructions: config.customInstructions,
           }),
         });
 
@@ -292,6 +311,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
           articleType: config.articleType,
           targetLength: config.targetLength,
           tone: config.tone,
+          customInstructions: config.customInstructions,
         }),
       });
 

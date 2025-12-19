@@ -7,6 +7,7 @@ import { TopicFeed } from "@/components/topic-feed";
 import { ArticleLibrary } from "@/components/article-library";
 import { CreateArticleFlow } from "@/components/create-article-flow";
 import { useAuth } from "@/hooks/use-auth";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { Topic } from "@/types";
 
 function DashboardContent() {
@@ -57,7 +58,7 @@ function DashboardContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+      <div className="min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
@@ -68,13 +69,13 @@ function DashboardContent() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
+    <div className="min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white">
       {/* Header */}
-      <header className="border-b border-zinc-800 px-4 sm:px-6 py-4">
+      <header className="border-b border-slate-200 dark:border-zinc-800 px-4 sm:px-6 py-4 bg-white dark:bg-zinc-950">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h1 className="text-xl font-bold">Content Studio</h1>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
-            <nav className="flex gap-1 bg-zinc-900 rounded-lg p-1 w-full sm:w-auto">
+            <nav className="flex gap-1 bg-slate-100 dark:bg-zinc-900 rounded-lg p-1 w-full sm:w-auto">
               {["create", "topics", "library"].map((tab) => (
                 <button
                   key={tab}
@@ -83,8 +84,8 @@ function DashboardContent() {
                   }
                   className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                     activeTab === tab
-                      ? "bg-zinc-700 text-white"
-                      : "text-zinc-400 hover:text-white"
+                      ? "bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-800"
                   }`}
                 >
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -92,12 +93,13 @@ function DashboardContent() {
               ))}
             </nav>
             <div className="flex items-center gap-2 sm:gap-3">
-              <span className="text-xs sm:text-sm text-zinc-400 truncate">
+              <ThemeToggle />
+              <span className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 truncate">
                 {user.email}
               </span>
               <button
                 onClick={signOut}
-                className="px-3 sm:px-4 py-2 text-xs sm:text-sm bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors whitespace-nowrap"
+                className="px-3 sm:px-4 py-2 text-xs sm:text-sm bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white rounded-lg transition-colors whitespace-nowrap border border-slate-200 dark:border-transparent"
               >
                 Sign Out
               </button>
@@ -132,7 +134,7 @@ export default function Dashboard() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+        <div className="min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
       }

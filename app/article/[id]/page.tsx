@@ -3,19 +3,21 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CanvasEditor } from "@/components/canvas-editor";
-import { LoadingDialog } from "@/components/loading-dialog";
 import { downloadAsFile, removeFirstH1FromMarkdown } from "@/lib/utils";
 import { generateFrontmatter } from "@/lib/frontmatter";
 import { useArticleData } from "@/hooks/useArticleData";
 import { ArticleHeader } from "@/components/article/ArticleHeader";
 import { ArticleSettings } from "@/components/article/ArticleSettings";
 import { LoadingStates } from "@/components/article/LoadingStates";
+import { useAuth } from "@/hooks/use-auth";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { Article, ArticleImage } from "@/types";
 
 export default function ArticlePage() {
   const params = useParams();
   const router = useRouter();
   const articleId = params.id as string;
+  const { user, signOut } = useAuth();
 
   const {
     article,
@@ -371,13 +373,48 @@ export default function ArticlePage() {
 
   return (
     <>
-      {/* Loading Dialog for Cover Image Generation */}
-      <LoadingDialog
-        isOpen={isGeneratingImage}
-        title="Generating Cover Image"
-        message="Creating your cover image with AI. This may take a few moments..."
-      />
-      <div className="h-screen overflow-hidden bg-zinc-950 text-white flex flex-col">
+      <div className="h-screen overflow-hidden bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white flex flex-col">
+        {/* Main Dashboard Header */}
+        <header className="border-b border-slate-200 dark:border-zinc-800 px-4 sm:px-6 py-4 bg-white dark:bg-zinc-950">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <h1 className="text-xl font-bold">Content Studio</h1>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+              <nav className="flex gap-1 bg-slate-100 dark:bg-zinc-900 rounded-lg p-1 w-full sm:w-auto">
+                {["create", "topics", "library"].map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => router.push(`/dashboard?tab=${tab}`)}
+                    className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                      false // Current tab is always false since we're not on dashboard
+                        ? "bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-sm"
+                        : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </nav>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <ThemeToggle />
+                {user && (
+                  <>
+                    <span className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 truncate">
+                      {user.email}
+                    </span>
+                    <button
+                      onClick={signOut}
+                      className="px-3 sm:px-4 py-2 text-xs sm:text-sm bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white rounded-lg transition-colors whitespace-nowrap border border-slate-200 dark:border-transparent"
+                    >
+                      Sign Out
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Article Header */}
         <ArticleHeader
           article={article}
           activeTab={activeTab}
@@ -407,6 +444,20 @@ export default function ArticlePage() {
                   const data = await response.json();
                   if (data.article?.images) {
                     // Normalize images to ensure only one cover image
+                    const normalizedImages = normalizeImages(
+                      data.article.images,
+                      data.article?.cover_image
+                    );
+                    setImages(normalizedImages);
+                  }
+                }
+              }}
+              onGenerateCoverImageComplete={async () => {
+                // Refresh images after cover image generation completes
+                const response = await fetch(`/api/articles?id=${article.id}`);
+                if (response.ok) {
+                  const data = await response.json();
+                  if (data.article?.images) {
                     const normalizedImages = normalizeImages(
                       data.article.images,
                       data.article?.cover_image

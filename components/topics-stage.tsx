@@ -23,7 +23,7 @@ export function TopicsStage({ topics, isLoading, onSelect, onBack, researchMetad
     return (
       <div className="text-center py-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-zinc-400">Discovering topics...</p>
+        <p className="text-slate-600 dark:text-zinc-400">Discovering topics...</p>
       </div>
     );
   }
@@ -31,10 +31,10 @@ export function TopicsStage({ topics, isLoading, onSelect, onBack, researchMetad
   if (topics.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-zinc-400 mb-4">No topics found. Try different keywords or industry.</p>
+        <p className="text-slate-600 dark:text-zinc-400 mb-4">No topics found. Try different keywords or industry.</p>
         <button
           onClick={onBack}
-          className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg"
+          className="px-4 py-2 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg text-slate-900 dark:text-white"
         >
           Go Back
         </button>
@@ -47,10 +47,10 @@ export function TopicsStage({ topics, isLoading, onSelect, onBack, researchMetad
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">Select a Topic</h2>
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Select a Topic</h2>
         <button
           onClick={onBack}
-          className="px-4 py-2 text-zinc-400 hover:text-white"
+          className="px-4 py-2 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
         >
           ← Back
         </button>
@@ -65,12 +65,12 @@ export function TopicsStage({ topics, isLoading, onSelect, onBack, researchMetad
               <p className="text-blue-400 font-semibold text-sm mb-1">
                 {researchMetadata.duplicatesFiltered} duplicate topic{(researchMetadata.duplicatesFiltered || 0) > 1 ? 's' : ''} filtered
               </p>
-              <p className="text-zinc-400 text-xs mb-2">
+              <p className="text-blue-700 dark:text-zinc-400 text-xs mb-2">
                 We automatically removed topics that are very similar ({'>'}90%) to existing articles to prevent duplicate content.
               </p>
               {researchMetadata.duplicates && researchMetadata.duplicates.length > 0 && (
-                <details className="text-xs text-zinc-500 mt-2">
-                  <summary className="cursor-pointer hover:text-zinc-400">Show filtered topics</summary>
+                <details className="text-xs text-blue-600 dark:text-zinc-500 mt-2">
+                  <summary className="cursor-pointer hover:text-blue-800 dark:hover:text-zinc-400">Show filtered topics</summary>
                   <ul className="mt-2 space-y-1 ml-4">
                     {researchMetadata.duplicates.map((dup, idx) => (
                       <li key={idx}>
@@ -134,30 +134,30 @@ export function TopicsStage({ topics, isLoading, onSelect, onBack, researchMetad
               className={`p-6 rounded-xl border text-left transition-all ${
                 canSelect
                   ? hasSimilarTopics
-                    ? "border-yellow-500/30 hover:border-yellow-500 hover:bg-zinc-900/50 cursor-pointer"
-                    : "border-zinc-800 hover:border-blue-500 hover:bg-zinc-900/50 cursor-pointer"
-                  : "border-zinc-800 opacity-50 cursor-not-allowed"
+                    ? "border-yellow-500/50 dark:border-yellow-500/30 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-zinc-900/50 cursor-pointer bg-white dark:bg-zinc-900/30"
+                    : "border-slate-200 dark:border-zinc-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-zinc-900/50 cursor-pointer bg-white dark:bg-zinc-900/30"
+                  : "border-slate-200 dark:border-zinc-800 opacity-50 cursor-not-allowed bg-white dark:bg-zinc-900/30"
               }`}
             >
-              <h3 className="font-semibold text-lg mb-2">{topic.title}</h3>
+              <h3 className="font-semibold text-lg mb-2 text-slate-900 dark:text-white">{topic.title}</h3>
               {topic.summary && (
-                <p className="text-zinc-400 text-sm mb-3">{topic.summary}</p>
+                <p className="text-slate-600 dark:text-zinc-400 text-sm mb-3">{topic.summary}</p>
               )}
 
               {/* Similar Topics Warning */}
               {hasSimilarTopics && (
-                <div className="mb-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                  <p className="text-yellow-400 text-xs font-semibold mb-1">
+                <div className="mb-3 p-3 bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-300 dark:border-yellow-500/30 rounded-lg">
+                  <p className="text-yellow-700 dark:text-yellow-400 text-xs font-semibold mb-1">
                     ⚠️ Similar to existing topics ({Math.round(highestSimilarity * 100)}% match)
                   </p>
-                  <div className="text-zinc-400 text-xs space-y-1">
+                  <div className="text-yellow-600 dark:text-zinc-400 text-xs space-y-1">
                     {similarTopics.slice(0, 2).map((similar) => (
                       <div key={similar.id}>
                         • "{similar.title}" ({Math.round(similar.similarity * 100)}%)
                       </div>
                     ))}
                     {similarTopics.length > 2 && (
-                      <div className="text-zinc-500">
+                      <div className="text-yellow-600 dark:text-zinc-500">
                         +{similarTopics.length - 2} more similar topic{similarTopics.length - 2 > 1 ? 's' : ''}
                       </div>
                     )}
@@ -165,7 +165,7 @@ export function TopicsStage({ topics, isLoading, onSelect, onBack, researchMetad
                 </div>
               )}
 
-              <div className="flex items-center gap-4 text-xs text-zinc-500">
+              <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-zinc-500">
                 <span>Relevance: {Math.round((topic.relevance_score || 0) * 100)}%</span>
                 {topic.sources && topic.sources.length > 0 && (
                   <span>{topic.sources.length} sources</span>
@@ -173,10 +173,10 @@ export function TopicsStage({ topics, isLoading, onSelect, onBack, researchMetad
                 {hasId && <span className="text-green-400">✓ Has ID</span>}
               </div>
               {!hasId && (
-                <p className="text-red-400 text-xs mt-2">⚠️ Topic missing ID - cannot be selected</p>
+                <p className="text-red-600 dark:text-red-400 text-xs mt-2">⚠️ Topic missing ID - cannot be selected</p>
               )}
               {isLoading && (
-                <p className="text-blue-400 text-xs mt-2">⏳ Loading...</p>
+                <p className="text-blue-600 dark:text-blue-400 text-xs mt-2">⏳ Loading...</p>
               )}
             </button>
           );

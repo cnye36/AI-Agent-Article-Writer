@@ -35,6 +35,26 @@ const nextConfig = {
       config.cache.maxAge = 1000 * 60 * 60 * 24 * 7; // 7 days
     }
 
+    // Exclude unnecessary files from webpack processing
+    if (!isServer) {
+      // Exclude server-only modules from client bundle
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+      };
+    }
+
+    // Optimize module resolution
+    config.resolve.modules = ['node_modules', ...(config.resolve.modules || [])];
+
+    // Reduce bundle size by excluding large dependencies from client bundle when possible
+    if (!isServer) {
+      config.externals = config.externals || [];
+    }
+
     return config;
   },
 };

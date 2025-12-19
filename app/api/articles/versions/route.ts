@@ -8,7 +8,16 @@ const CreateArticleSchema = z.object({
   content: z.string().min(1),
   excerpt: z.string().max(300).optional(),
   industryId: z.string().uuid(),
-  articleType: z.enum(["blog", "technical", "news", "opinion", "tutorial", "listicle", "affiliate"]),
+  articleType: z.enum([
+    "blog",
+    "technical",
+    "news",
+    "opinion",
+    "tutorial",
+    "listicle",
+    "affiliate",
+    "personal",
+  ]),
   status: z.enum(["draft", "review", "published"]).default("draft"),
   seoKeywords: z.array(z.string()).optional(),
   outlineId: z.string().uuid().optional(),
@@ -30,7 +39,18 @@ const UpdateArticleSchema = z.object({
 const SearchArticlesSchema = z.object({
   query: z.string().optional(),
   industryId: z.string().uuid().optional(),
-  articleType: z.enum(["blog", "technical", "news", "opinion", "tutorial"]).optional(),
+  articleType: z
+    .enum([
+      "blog",
+      "technical",
+      "news",
+      "opinion",
+      "tutorial",
+      "listicle",
+      "affiliate",
+      "personal",
+    ])
+    .optional(),
   status: z.enum(["draft", "review", "published"]).optional(),
   sortBy: z.enum(["created_at", "updated_at", "title", "word_count"]).default("updated_at"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),

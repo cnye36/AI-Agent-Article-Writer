@@ -7,7 +7,7 @@ const plans = [
   {
     name: "Starter",
     icon: Sparkles,
-    price: "29",
+    price: "9.99",
     period: "month",
     description: "Perfect for individual creators and bloggers",
     features: [
@@ -27,7 +27,7 @@ const plans = [
   {
     name: "Professional",
     icon: Zap,
-    price: "79",
+    price: "29.99",
     period: "month",
     description: "For professional writers and content teams",
     features: [
@@ -75,25 +75,25 @@ const plans = [
 
 export function PricingSection() {
   return (
-    <section id="pricing" className="py-24 bg-zinc-950 relative">
+    <section id="pricing" className="py-24 bg-gradient-to-b from-blue-50 via-white to-blue-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 relative overflow-hidden">
       {/* Background effects */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/10 via-transparent to-transparent" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-200/20 dark:from-blue-900/20 via-transparent to-transparent" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section header */}
         <div className="text-center space-y-4 mb-16">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-sm font-medium">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-sm font-medium">
             <Zap className="w-4 h-4" />
             Simple Pricing
           </div>
-          <h2 className="text-4xl sm:text-5xl font-bold text-white">
+          <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white">
             Choose Your Plan
             <br />
-            <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-500 to-purple-500 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
               Scale as You Grow
             </span>
           </h2>
-          <p className="max-w-2xl mx-auto text-lg text-zinc-400">
+          <p className="max-w-2xl mx-auto text-lg text-slate-600 dark:text-zinc-400">
             Start with a 14-day free trial. No credit card required.
             <br />
             Cancel anytime.
@@ -107,10 +107,10 @@ export function PricingSection() {
             return (
               <div
                 key={i}
-                className={`relative bg-gradient-to-b from-zinc-900 to-zinc-950 border rounded-2xl p-8 flex flex-col ${
+                className={`relative bg-white dark:bg-gradient-to-b dark:from-zinc-900 dark:to-zinc-950 border rounded-2xl p-8 flex flex-col transition-all ${
                   plan.popular
-                    ? "border-purple-500/50 shadow-xl shadow-purple-500/20 scale-105"
-                    : "border-zinc-800"
+                    ? "border-purple-500/50 shadow-xl shadow-purple-500/20 dark:shadow-purple-500/20 scale-105 ring-2 ring-purple-500/20"
+                    : "border-slate-200 dark:border-zinc-800 hover:border-blue-300 dark:hover:border-zinc-700 hover:shadow-lg"
                 }`}
               >
                 {/* Popular badge */}
@@ -126,29 +126,29 @@ export function PricingSection() {
                 <div
                   className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${plan.gradient} p-[2px] mb-6`}
                 >
-                  <div className="w-full h-full bg-zinc-900 rounded-xl flex items-center justify-center">
-                    <Icon className="w-6 h-6 text-white" />
+                  <div className="w-full h-full bg-white dark:bg-zinc-900 rounded-xl flex items-center justify-center">
+                    <Icon className="w-6 h-6 text-slate-700 dark:text-white" />
                   </div>
                 </div>
 
                 {/* Plan name */}
-                <h3 className="text-2xl font-bold text-white mb-2">
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
                   {plan.name}
                 </h3>
-                <p className="text-zinc-400 text-sm mb-6">{plan.description}</p>
+                <p className="text-slate-600 dark:text-zinc-400 text-sm mb-6">{plan.description}</p>
 
                 {/* Price */}
                 <div className="mb-8">
                   {plan.price === "Custom" ? (
-                    <div className="text-4xl font-bold text-white">
+                    <div className="text-4xl font-bold text-slate-900 dark:text-white">
                       Custom Pricing
                     </div>
                   ) : (
                     <div className="flex items-baseline gap-1">
-                      <span className="text-5xl font-bold text-white">
+                      <span className="text-5xl font-bold text-slate-900 dark:text-white">
                         ${plan.price}
                       </span>
-                      <span className="text-zinc-500">/{plan.period}</span>
+                      <span className="text-slate-500 dark:text-zinc-500">/{plan.period}</span>
                     </div>
                   )}
                 </div>
@@ -159,7 +159,7 @@ export function PricingSection() {
                   className={`w-full py-3 px-6 rounded-lg font-semibold text-center transition-all mb-8 ${
                     plan.popular
                       ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-lg hover:shadow-purple-500/25 hover:scale-105"
-                      : "bg-zinc-800 text-white hover:bg-zinc-700 border border-zinc-700"
+                      : "bg-blue-600 dark:bg-zinc-800 text-white hover:bg-blue-700 dark:hover:bg-zinc-700 border border-transparent dark:border-zinc-700"
                   }`}
                 >
                   {plan.cta}
@@ -172,11 +172,11 @@ export function PricingSection() {
                       <div
                         className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center bg-gradient-to-br ${plan.gradient} p-[1px] mt-0.5`}
                       >
-                        <div className="w-full h-full bg-zinc-900 rounded-full flex items-center justify-center">
-                          <Check className="w-3 h-3 text-white" />
+                        <div className="w-full h-full bg-white dark:bg-zinc-900 rounded-full flex items-center justify-center">
+                          <Check className="w-3 h-3 text-slate-700 dark:text-white" />
                         </div>
                       </div>
-                      <span className="text-zinc-300 text-sm">{feature}</span>
+                      <span className="text-slate-700 dark:text-zinc-300 text-sm">{feature}</span>
                     </div>
                   ))}
                 </div>
@@ -192,10 +192,10 @@ export function PricingSection() {
 
         {/* FAQ or additional info */}
         <div className="mt-16 text-center space-y-4">
-          <p className="text-zinc-400">
+          <p className="text-slate-500 dark:text-zinc-400">
             All plans include 14-day free trial • No credit card required
           </p>
-          <div className="flex flex-wrap justify-center gap-6 text-sm text-zinc-500">
+          <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-500 dark:text-zinc-500">
             <span>✓ Cancel anytime</span>
             <span>✓ No setup fees</span>
             <span>✓ Secure payments</span>

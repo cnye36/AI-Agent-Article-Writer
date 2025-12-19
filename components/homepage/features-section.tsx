@@ -119,7 +119,7 @@ const colorMap = {
 
 export function FeaturesSection() {
   return (
-    <section id="features" className="py-24 bg-zinc-950">
+    <section id="features" className="py-24 bg-white dark:bg-zinc-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section header */}
         <div className="text-center space-y-4 mb-16">
@@ -127,14 +127,14 @@ export function FeaturesSection() {
             <Sparkles className="w-4 h-4" />
             Powerful Features
           </div>
-          <h2 className="text-4xl sm:text-5xl font-bold text-white">
+          <h2 className="text-4xl sm:text-5xl font-bold text-zinc-900 dark:text-white">
             Everything You Need to
             <br />
             <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
               Create Amazing Content
             </span>
           </h2>
-          <p className="max-w-2xl mx-auto text-lg text-zinc-400">
+          <p className="max-w-2xl mx-auto text-lg text-zinc-600 dark:text-zinc-400">
             A complete AI-powered content creation platform with advanced features
             to help you write, edit, and publish professional articles faster.
           </p>
@@ -147,7 +147,7 @@ export function FeaturesSection() {
             return (
               <div
                 key={i}
-                className="group relative bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-xl p-6 hover:border-zinc-700 transition-all hover:shadow-lg hover:shadow-blue-500/5"
+                className="group relative bg-white dark:bg-gradient-to-b dark:from-zinc-900 dark:to-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 hover:border-slate-300 dark:hover:border-zinc-700 transition-all hover:shadow-lg hover:shadow-blue-500/10 dark:hover:shadow-blue-500/5"
               >
                 {/* Icon */}
                 <div
@@ -159,10 +159,10 @@ export function FeaturesSection() {
                 </div>
 
                 {/* Content */}
-                <h3 className="text-xl font-semibold text-white mb-2">
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
                   {feature.title}
                 </h3>
-                <p className="text-zinc-400 text-sm leading-relaxed">
+                <p className="text-slate-600 dark:text-zinc-400 text-sm leading-relaxed">
                   {feature.description}
                 </p>
 

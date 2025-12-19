@@ -14,6 +14,7 @@ const OutlineRequestSchema = z.object({
     "tutorial",
     "listicle",
     "affiliate",
+    "personal",
   ]),
   targetLength: z.enum(["short", "medium", "long"]),
   tone: z.string().default("professional"),
@@ -65,13 +66,63 @@ const ARTICLE_TYPE_CONFIG = {
     includeRecommendations: true,
     formalityLevel: "moderate",
   },
+  personal: {
+    description: "First-person experience/journey with concrete takeaways",
+    sectionCount: { short: 4, medium: 6, long: 8 },
+    includePersonalAnecdotes: true,
+    formalityLevel: "casual",
+  },
 };
 
-// Target word counts
-const LENGTH_CONFIG = {
-  short: { min: 400, target: 500, max: 700 },
-  medium: { min: 800, target: 1000, max: 1300 },
-  long: { min: 1800, target: 2000, max: 3000 },
+// Target word counts - article-type specific optimal lengths
+// Based on content requirements: Default 1,500, Deep Dive 2,500+, Listicle 1,800, Opinion 900, News 600
+const LENGTH_CONFIG: Record<
+  string,
+  Record<
+    "short" | "medium" | "long",
+    { min: number; target: number; max: number }
+  >
+> = {
+  blog: {
+    short: { min: 1200, target: 1500, max: 1800 }, // Default/Standard: 1,500 words
+    medium: { min: 1200, target: 1500, max: 1800 },
+    long: { min: 2000, target: 2500, max: 3000 },
+  },
+  technical: {
+    short: { min: 2000, target: 2500, max: 3000 }, // Deep Dive/Guide: 2,500+ words
+    medium: { min: 2000, target: 2500, max: 3000 },
+    long: { min: 2000, target: 2500, max: 3500 },
+  },
+  news: {
+    short: { min: 500, target: 600, max: 800 }, // News/Update: 600 words
+    medium: { min: 500, target: 600, max: 800 },
+    long: { min: 800, target: 1000, max: 1300 },
+  },
+  opinion: {
+    short: { min: 700, target: 900, max: 1100 }, // Opinion/Editorial: 900 words
+    medium: { min: 700, target: 900, max: 1100 },
+    long: { min: 1200, target: 1500, max: 1800 },
+  },
+  tutorial: {
+    short: { min: 2000, target: 2500, max: 3000 }, // Deep Dive/Guide: 2,500+ words
+    medium: { min: 2000, target: 2500, max: 3000 },
+    long: { min: 2000, target: 2500, max: 3500 },
+  },
+  listicle: {
+    short: { min: 1500, target: 1800, max: 2200 }, // Listicle: 1,800 words
+    medium: { min: 1500, target: 1800, max: 2200 },
+    long: { min: 2000, target: 2500, max: 3000 },
+  },
+  affiliate: {
+    short: { min: 1200, target: 1500, max: 1800 }, // Default/Standard: 1,500 words
+    medium: { min: 1200, target: 1500, max: 1800 },
+    long: { min: 2000, target: 2500, max: 3000 },
+  },
+  personal: {
+    short: { min: 900, target: 1200, max: 1500 },
+    medium: { min: 1200, target: 1500, max: 1800 },
+    long: { min: 2000, target: 2500, max: 3000 },
+  },
 };
 
 export async function POST(request: NextRequest) {
@@ -99,7 +150,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { topicId, articleType, targetLength, tone } = validationResult.data;
+    const { topicId, articleType, targetLength, tone, customInstructions } =
+      validationResult.data;
 
     // Fetch the topic
     const { data: topicData, error: topicError } = await supabase
@@ -133,16 +185,24 @@ export async function POST(request: NextRequest) {
 
     // Calculate section word targets
     const typeConfig = ARTICLE_TYPE_CONFIG[articleType];
-    const lengthConfig = LENGTH_CONFIG[targetLength];
+    const lengthConfig =
+      LENGTH_CONFIG[articleType]?.[targetLength] ||
+      LENGTH_CONFIG.blog[targetLength];
     const sectionCount = typeConfig.sectionCount[targetLength];
 
     // Initialize and run the outline agent
     const outlineAgent = createOutlineAgent();
 
+    const topicSummaryWithInstructions = customInstructions?.trim()
+      ? `${
+          topic.summary || ""
+        }\n\nUser instructions:\n${customInstructions}`.trim()
+      : topic.summary || "";
+
     const result = await outlineAgent.invoke({
       topic: {
         title: topic.title,
-        summary: topic.summary || "",
+        summary: topicSummaryWithInstructions,
         sources: topic.sources || [],
         angle: topic.metadata?.angle || "",
         hook: topic.metadata?.hook || "", // Use hook from research if available
@@ -170,6 +230,7 @@ export async function POST(request: NextRequest) {
         tone,
         totalWordTarget: lengthConfig.target,
         sectionCount,
+        ...(customInstructions?.trim() ? { customInstructions } : {}),
       },
       sections: (result.outline.sections || []).map(
         (section: { heading: string; keyPoints: string[] }, index: number) => ({
@@ -519,7 +580,8 @@ export async function PUT(request: NextRequest) {
       });
     }
 
-    const { topicId, articleType, targetLength, tone } = validationResult.data;
+    const { topicId, articleType, targetLength, tone, customInstructions } =
+      validationResult.data;
 
     // Fetch the topic
     const { data: topicData, error: topicError } = await supabase
@@ -569,7 +631,9 @@ export async function PUT(request: NextRequest) {
 
     // Calculate section word targets
     const typeConfig = ARTICLE_TYPE_CONFIG[articleType];
-    const lengthConfig = LENGTH_CONFIG[targetLength];
+    const lengthConfig =
+      LENGTH_CONFIG[articleType]?.[targetLength] ||
+      LENGTH_CONFIG.blog[targetLength];
     const sectionCount = typeConfig.sectionCount[targetLength];
 
     // Create placeholder outline immediately
@@ -585,6 +649,7 @@ export async function PUT(request: NextRequest) {
         tone,
         totalWordTarget: lengthConfig.target,
         sectionCount,
+        ...(customInstructions?.trim() ? { customInstructions } : {}),
       },
     };
 
@@ -653,11 +718,17 @@ export async function PUT(request: NextRequest) {
           // Initialize outline agent
           const outlineAgent = createOutlineAgent();
 
+          const topicSummaryWithInstructions = customInstructions?.trim()
+            ? `${
+                topic.summary || ""
+              }\n\nUser instructions:\n${customInstructions}`.trim()
+            : topic.summary || "";
+
           // Generate outline using the agent (search happens inside)
           const result = await outlineAgent.invoke({
             topic: {
               title: topic.title,
-              summary: topic.summary || "",
+              summary: topicSummaryWithInstructions,
               sources: topic.sources || [], // Use existing sources immediately
               angle: topic.metadata?.angle || "",
               hook: topic.metadata?.hook || "", // Use hook from research if available
@@ -711,6 +782,7 @@ export async function PUT(request: NextRequest) {
               tone,
               totalWordTarget: lengthConfig.target,
               sectionCount,
+              ...(customInstructions?.trim() ? { customInstructions } : {}),
             },
             sections: (parsedOutline.sections || []).map(
               (section: any, index: number) => ({
