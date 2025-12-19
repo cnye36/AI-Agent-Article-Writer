@@ -1,7 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Settings, CreditCard, User, Bell, Shield, Globe } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import {
+  AlertTriangle,
+  Bell,
+  CheckCircle2,
+  CreditCard,
+  Globe,
+  Loader2,
+  Settings,
+  Shield,
+  User,
+  X,
+} from "lucide-react";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { useAuth } from "@/hooks/use-auth";
 
 interface SettingsModalProps {
@@ -9,6 +22,11 @@ interface SettingsModalProps {
   onClose: () => void;
   initialTab?: "settings" | "billing";
 }
+
+type BillingAlert = {
+  type: "success" | "error" | "info";
+  message: string;
+};
 
 export function SettingsModal({
   isOpen,
@@ -98,7 +116,7 @@ export function SettingsModal({
   );
 }
 
-function SettingsSection({ user }: { user: any }) {
+function SettingsSection({ user }: { user: SupabaseUser | null }) {
   const [email, setEmail] = useState(user?.email || "");
   const [name, setName] = useState("");
   const [notifications, setNotifications] = useState({
@@ -313,8 +331,8 @@ function SettingsSection({ user }: { user: any }) {
   );
 }
 
-function BillingSection({ user }: { user: any }) {
-  const [paymentMethod, setPaymentMethod] = useState("card");
+function BillingSection({ user }: { user: SupabaseUser | null }) {
+  const searchParams = useSearchParams();
   const [billingAddress, setBillingAddress] = useState({
     street: "",
     city: "",
@@ -322,27 +340,198 @@ function BillingSection({ user }: { user: any }) {
     zip: "",
     country: "US",
   });
+  const [isCreatingCheckout, setIsCreatingCheckout] = useState(false);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [alert, setAlert] = useState<BillingAlert | null>(null);
+
+  const appMetadata =
+    (user?.app_metadata as Record<string, unknown>) || {};
+  const userMetadata =
+    (user?.user_metadata as Record<string, unknown>) || {};
+
+  const planName = (appMetadata.plan || userMetadata.plan || "Free") as string;
+  const subscriptionStatus = (
+    appMetadata.subscription_status ||
+    userMetadata.subscription_status ||
+    "inactive"
+  ) as string;
+  const rawStripeCustomerId =
+    appMetadata.stripe_customer_id || userMetadata.stripe_customer_id;
+  const hasStripeCustomerId =
+    typeof rawStripeCustomerId === "string" && rawStripeCustomerId.length > 0;
+  const stripeCustomerId = hasStripeCustomerId ? rawStripeCustomerId : undefined;
+
+  const normalizedStatus = subscriptionStatus.toLowerCase();
+  const hasActiveSubscription = ["active", "trialing", "past_due"].includes(
+    normalizedStatus
+  );
+  const canOpenPortal = hasActiveSubscription || Boolean(stripeCustomerId);
+
+  useEffect(() => {
+    const billingStatus = searchParams?.get("billing");
+
+    if (billingStatus === "success") {
+      setAlert({
+        type: "success",
+        message: "Your subscription was updated successfully.",
+      });
+    } else if (billingStatus === "cancelled") {
+      setAlert({
+        type: "info",
+        message: "Checkout was cancelled. You can restart it any time.",
+      });
+    }
+  }, [searchParams]);
+
+  const handleUpgrade = async () => {
+    setAlert(null);
+    setIsCreatingCheckout(true);
+
+    try {
+      const response = await fetch("/api/billing/checkout", { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok || !data?.url) {
+        throw new Error(
+          data?.error || "Unable to start checkout. Please try again."
+        );
+      }
+
+      window.location.href = data.url;
+    } catch (error) {
+      setAlert({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to start checkout. Please try again.",
+      });
+    } finally {
+      setIsCreatingCheckout(false);
+    }
+  };
+
+  const handleManageBilling = async () => {
+    setAlert(null);
+    setIsOpeningPortal(true);
+
+    try {
+      const response = await fetch("/api/billing/portal", { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok || !data?.url) {
+        throw new Error(
+          data?.error || "Unable to open the billing portal right now."
+        );
+      }
+
+      window.location.href = data.url;
+    } catch (error) {
+      setAlert({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to open the billing portal right now.",
+      });
+    } finally {
+      setIsOpeningPortal(false);
+    }
+  };
+
+  const handleSaveBillingAddress = () => {
+    setAlert({
+      type: "info",
+      message:
+        "Billing address saved for your session. We'll attach it during checkout soon.",
+    });
+  };
 
   return (
     <div className="space-y-8">
+      {alert && (
+        <div
+          className={`flex items-start gap-3 p-4 rounded-lg border ${
+            alert.type === "error"
+              ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200"
+              : alert.type === "success"
+              ? "border-green-200 bg-green-50 text-green-800 dark:border-green-900/50 dark:bg-green-950/50 dark:text-green-200"
+              : "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/50 dark:text-blue-200"
+          }`}
+        >
+          {alert.type === "error" ? (
+            <AlertTriangle className="w-5 h-5 mt-0.5" />
+          ) : alert.type === "success" ? (
+            <CheckCircle2 className="w-5 h-5 mt-0.5" />
+          ) : (
+            <CreditCard className="w-5 h-5 mt-0.5" />
+          )}
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{alert.message}</p>
+            {alert.type === "info" && (
+              <p className="text-xs opacity-90">
+                Need help? Contact support if something looks wrong with your plan.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Current Plan Section */}
       <section>
         <h3 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
           Current Plan
         </h3>
         <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                Free Plan
-              </p>
-              <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                Limited features • No credit card required
-              </p>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                  {planName} Plan
+                </p>
+                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                  Status: {hasActiveSubscription ? "Active" : "Not subscribed"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-white/70 dark:bg-blue-900/40 border border-blue-200/70 dark:border-blue-800/60 text-blue-900 dark:text-blue-100">
+                  {normalizedStatus === "inactive" ? "Free tier" : normalizedStatus}
+                </span>
+                {stripeCustomerId && (
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-white/60 dark:bg-blue-900/30 border border-blue-200/70 dark:border-blue-800/60 text-blue-900 dark:text-blue-100">
+                    Billing enabled
+                  </span>
+                )}
+              </div>
             </div>
-            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors">
-              Upgrade Plan
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleUpgrade}
+                disabled={isCreatingCheckout}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                {isCreatingCheckout && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Upgrade Plan
+              </button>
+              <button
+                onClick={handleManageBilling}
+                disabled={!canOpenPortal || isOpeningPortal}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-blue-950 hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-60 disabled:cursor-not-allowed text-blue-900 dark:text-blue-100 rounded-lg text-sm font-medium transition-colors border border-blue-200 dark:border-blue-800"
+              >
+                {isOpeningPortal && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Manage Billing
+              </button>
+            </div>
+            {!canOpenPortal && (
+              <p className="text-xs text-blue-800/80 dark:text-blue-200/80">
+                Activate a paid plan to unlock the billing portal and manage payment
+                methods.
+              </p>
+            )}
           </div>
         </div>
       </section>
@@ -492,11 +681,13 @@ function BillingSection({ user }: { user: any }) {
 
       {/* Save Button */}
       <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-zinc-800">
-        <button className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors">
+        <button
+          onClick={handleSaveBillingAddress}
+          className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"
+        >
           Save Billing Information
         </button>
       </div>
     </div>
   );
 }
-
