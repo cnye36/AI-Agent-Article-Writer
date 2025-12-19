@@ -8,12 +8,13 @@ import { ArticleLibrary } from "@/components/article-library";
 import { CreateArticleFlow } from "@/components/create-article-flow";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserNav } from "@/components/user-nav";
 import type { Topic } from "@/types";
 
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
   // Initialize activeTab from URL parameter
   const getInitialTab = (): "create" | "topics" | "library" => {
     const tabParam = searchParams.get("tab");
@@ -94,15 +95,7 @@ function DashboardContent() {
             </nav>
             <div className="flex items-center gap-2 sm:gap-3">
               <ThemeToggle />
-              <span className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 truncate">
-                {user.email}
-              </span>
-              <button
-                onClick={signOut}
-                className="px-3 sm:px-4 py-2 text-xs sm:text-sm bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white rounded-lg transition-colors whitespace-nowrap border border-slate-200 dark:border-transparent"
-              >
-                Sign Out
-              </button>
+              <UserNav />
             </div>
           </div>
         </div>

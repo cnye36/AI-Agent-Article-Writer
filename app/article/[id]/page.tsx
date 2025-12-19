@@ -11,13 +11,14 @@ import { ArticleSettings } from "@/components/article/ArticleSettings";
 import { LoadingStates } from "@/components/article/LoadingStates";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserNav } from "@/components/user-nav";
 import type { Article, ArticleImage } from "@/types";
 
 export default function ArticlePage() {
   const params = useParams();
   const router = useRouter();
   const articleId = params.id as string;
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
 
   const {
     article,
@@ -396,19 +397,7 @@ export default function ArticlePage() {
               </nav>
               <div className="flex items-center gap-2 sm:gap-3">
                 <ThemeToggle />
-                {user && (
-                  <>
-                    <span className="text-xs sm:text-sm text-slate-600 dark:text-zinc-400 truncate">
-                      {user.email}
-                    </span>
-                    <button
-                      onClick={signOut}
-                      className="px-3 sm:px-4 py-2 text-xs sm:text-sm bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white rounded-lg transition-colors whitespace-nowrap border border-slate-200 dark:border-transparent"
-                    >
-                      Sign Out
-                    </button>
-                  </>
-                )}
+                <UserNav />
               </div>
             </div>
           </div>
