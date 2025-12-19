@@ -357,10 +357,9 @@ function BillingSection({ user }: { user: SupabaseUser | null }) {
   ) as string;
   const rawStripeCustomerId =
     appMetadata.stripe_customer_id || userMetadata.stripe_customer_id;
-  const stripeCustomerId =
-    typeof rawStripeCustomerId === "string" && rawStripeCustomerId.length > 0
-      ? rawStripeCustomerId
-      : undefined;
+  const hasStripeCustomerId =
+    typeof rawStripeCustomerId === "string" && rawStripeCustomerId.length > 0;
+  const stripeCustomerId = hasStripeCustomerId ? rawStripeCustomerId : undefined;
 
   const normalizedStatus = subscriptionStatus.toLowerCase();
   const hasActiveSubscription = ["active", "trialing", "past_due"].includes(
