@@ -37,7 +37,11 @@ export function ImageLibrary({
                 ? "border-blue-500 dark:border-blue-500 ring-1 ring-blue-500"
                 : "border-slate-300 dark:border-zinc-800"
             )}
-            onClick={() => onImageClick(img)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onImageClick(img);
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
               onSetCoverImage(img.id);
@@ -47,7 +51,7 @@ export function ImageLibrary({
               src={img.url}
               alt="Generated"
               fill
-              className="object-cover"
+              className="object-cover pointer-events-none"
               unoptimized
             />
             {article.cover_image === img.url && (

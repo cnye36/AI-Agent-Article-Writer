@@ -12,6 +12,8 @@ interface FormattingToolbarProps {
   onLinkUrlChange: (url: string) => void;
   onLinkSubmit: () => void;
   onLinkCancel: () => void;
+  isMobileView?: boolean;
+  onToggleMobileView?: () => void;
 }
 
 export function FormattingToolbar({
@@ -24,12 +26,14 @@ export function FormattingToolbar({
   onLinkUrlChange,
   onLinkSubmit,
   onLinkCancel,
+  isMobileView = false,
+  onToggleMobileView,
 }: FormattingToolbarProps) {
   return (
     <div className="sticky top-0 z-40 px-4 sm:px-6 lg:px-8 py-3 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800/50">
       <div className="max-w-3xl mx-auto">
         <div className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-1.5 flex items-center gap-1 flex-wrap shadow-sm">
-          {/* Markdown Toggle */}
+          {/* View Toggles */}
           <div className="flex items-center gap-1 border-r border-slate-300 dark:border-zinc-700 pr-2 mr-1">
             <button
               onClick={onToggleMarkdown}
@@ -45,6 +49,21 @@ export function FormattingToolbar({
             >
               {showMarkdown ? "📝 Formatted" : "📄 Markdown"}
             </button>
+            {!showMarkdown && onToggleMobileView && (
+              <button
+                onClick={onToggleMobileView}
+                className={`px-2.5 py-1.5 text-sm rounded hover:bg-slate-100 dark:hover:bg-zinc-800 ${
+                  isMobileView ? "bg-slate-200 dark:bg-zinc-700 text-slate-900 dark:text-white" : "text-slate-600 dark:text-zinc-400"
+                }`}
+                title={
+                  isMobileView
+                    ? "Switch to desktop view"
+                    : "Switch to mobile view"
+                }
+              >
+                {isMobileView ? "🖥️ Desktop" : "📱 Mobile"}
+              </button>
+            )}
           </div>
 
           {/* History */}

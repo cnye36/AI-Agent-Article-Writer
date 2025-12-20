@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import type { Topic } from "@/types";
 
 interface TopicsStageProps {
@@ -7,6 +8,7 @@ interface TopicsStageProps {
   isLoading: boolean;
   onSelect: (topic: Topic) => void;
   onBack: () => void;
+  onSaveSelected?: (savedTopics: Topic[]) => void;
   researchMetadata?: {
     duplicatesFiltered?: number;
     duplicates?: Array<{
@@ -17,7 +19,106 @@ interface TopicsStageProps {
   } | null;
 }
 
-export function TopicsStage({ topics, isLoading, onSelect, onBack, researchMetadata }: TopicsStageProps) {
+export function TopicsStage({ topics, isLoading, onSelect, onBack, onSaveSelected, researchMetadata }: TopicsStageProps) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [topicBeingUsed, setTopicBeingUsed] = useState<string | null>(null);
+  const [savingTopicId, setSavingTopicId] = useState<string | null>(null);
+
+  // Save a single topic for later (without using it)
+  const handleSaveForLater = useCallback(async (topic: Topic, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the card click
+    
+    if (isLoading || !topic.id || savingTopicId) {
+      return;
+    }
+
+    setSavingTopicId(topic.id);
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/agents/research/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topicIds: [topic.id],
+          topics: topics,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to save topic");
+      }
+
+      const data = await response.json();
+      
+      // Notify parent of saved topics
+      if (onSaveSelected && data.topics) {
+        onSaveSelected(data.topics);
+      }
+      
+      // Show success message
+      // Topic will remain visible but now has a real ID
+    } catch (error) {
+      console.error("Error saving topic:", error);
+      alert(error instanceof Error ? error.message : "Failed to save topic");
+    } finally {
+      setIsSaving(false);
+      setSavingTopicId(null);
+    }
+  }, [topics, onSaveSelected, isLoading, savingTopicId]);
+
+  // Use topic immediately (save it if needed, then proceed)
+  const handleUseTopic = useCallback(async (topic: Topic) => {
+    if (isLoading || !topic.id || topicBeingUsed) {
+      return;
+    }
+
+    setTopicBeingUsed(topic.id);
+
+    try {
+      // If topic has temp ID, save it first
+      if (topic.id.startsWith("temp-")) {
+        const response = await fetch("/api/agents/research/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topicIds: [topic.id],
+            topics: topics,
+          }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || "Failed to save topic");
+        }
+
+        const data = await response.json();
+        if (!data.topics || data.topics.length === 0) {
+          throw new Error("No topic returned after saving");
+        }
+
+        // Use the saved topic (with real ID) for outline generation
+        const savedTopic = data.topics[0];
+        
+        // Update topics list
+        if (onSaveSelected) {
+          onSaveSelected(data.topics);
+        }
+
+        // Proceed with outline generation using the saved topic
+        // Note: onSelect will handle the loading state, so we don't clear topicBeingUsed here
+        onSelect(savedTopic);
+      } else {
+        // Topic is already saved, use it directly
+        onSelect(topic);
+      }
+    } catch (error) {
+      console.error("Error using topic:", error);
+      alert(error instanceof Error ? error.message : "Failed to use topic");
+      setTopicBeingUsed(null);
+    }
+  }, [topics, onSelect, onSaveSelected, isLoading, topicBeingUsed]);
   // Show loading state only when initially loading topics (not when selecting one)
   if (isLoading && topics.length === 0) {
     return (
@@ -47,13 +148,22 @@ export function TopicsStage({ topics, isLoading, onSelect, onBack, researchMetad
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Select a Topic</h2>
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+          Choose a Topic to Write Now
+        </h2>
         <button
           onClick={onBack}
           className="px-4 py-2 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
         >
           ← Back
         </button>
+      </div>
+
+      {/* Helper text */}
+      <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded-lg">
+        <p className="text-sm text-blue-800 dark:text-blue-300">
+          💡 <strong>Click on a topic</strong> to start writing now, or click <strong>"Save for Later"</strong> to save it without using it.
+        </p>
       </div>
 
       {/* Duplicates Filtered Notification */}
@@ -87,62 +197,39 @@ export function TopicsStage({ topics, isLoading, onSelect, onBack, researchMetad
 
       <div className="grid gap-4">
         {topics.map((topic) => {
-          const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            console.log("Topic button clicked:", topic);
-            console.log("Topic ID:", topic.id);
-            console.log("isLoading:", isLoading);
-            console.log("onSelect function:", onSelect);
-            
-            if (isLoading) {
-              console.warn("Already loading, ignoring click");
-              return;
-            }
-            
-            if (!topic) {
-              console.error("Topic is null or undefined");
-              return;
-            }
-            
-            if (!topic.id) {
-              console.error("Topic missing ID:", topic);
-              alert("This topic is missing an ID and cannot be selected. Please try finding topics again.");
-              return;
-            }
-            
-            console.log("Calling onSelect with topic:", topic);
-            try {
-              onSelect(topic);
-            } catch (error) {
-              console.error("Error calling onSelect:", error);
+          const isBeingUsed = topicBeingUsed === topic.id;
+          const isSavingThis = savingTopicId === topic.id;
+          const isSaved = !topic.id?.startsWith("temp-");
+          
+          const handleCardClick = () => {
+            if (!isLoading && !topicBeingUsed && !savingTopicId) {
+              handleUseTopic(topic);
             }
           };
-
-          const hasId = !!topic.id;
-          const canSelect = hasId && !isLoading;
 
           const similarTopics = topic.metadata?.similarTopics || [];
           const hasSimilarTopics = similarTopics.length > 0;
           const highestSimilarity = hasSimilarTopics ? similarTopics[0].similarity : 0;
 
           return (
-            <button
+            <div
               key={topic.id || `topic-${topic.title}`}
-              onClick={handleClick}
-              className={`p-6 rounded-xl border text-left transition-all ${
-                canSelect
-                  ? hasSimilarTopics
-                    ? "border-yellow-500/50 dark:border-yellow-500/30 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-zinc-900/50 cursor-pointer bg-white dark:bg-zinc-900/30"
-                    : "border-slate-200 dark:border-zinc-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-zinc-900/50 cursor-pointer bg-white dark:bg-zinc-900/30"
-                  : "border-slate-200 dark:border-zinc-800 opacity-50 cursor-not-allowed bg-white dark:bg-zinc-900/30"
+              onClick={handleCardClick}
+              className={`p-6 rounded-xl border text-left transition-all cursor-pointer ${
+                isBeingUsed
+                  ? "border-blue-500 bg-blue-100 dark:bg-blue-500/20"
+                  : hasSimilarTopics
+                  ? "border-yellow-500/50 dark:border-yellow-500/30 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-zinc-900/50 bg-white dark:bg-zinc-900/30"
+                  : "border-slate-200 dark:border-zinc-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-zinc-900/50 bg-white dark:bg-zinc-900/30"
               }`}
             >
-              <h3 className="font-semibold text-lg mb-2 text-slate-900 dark:text-white">{topic.title}</h3>
-              {topic.summary && (
-                <p className="text-slate-600 dark:text-zinc-400 text-sm mb-3">{topic.summary}</p>
-              )}
+              {/* Title and summary */}
+              <div className="mb-3">
+                <h3 className="font-semibold text-lg mb-2 text-slate-900 dark:text-white">{topic.title}</h3>
+                {topic.summary && (
+                  <p className="text-slate-600 dark:text-zinc-400 text-sm mb-3">{topic.summary}</p>
+                )}
+              </div>
 
               {/* Similar Topics Warning */}
               {hasSimilarTopics && (
@@ -165,20 +252,25 @@ export function TopicsStage({ topics, isLoading, onSelect, onBack, researchMetad
                 </div>
               )}
 
-              <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-zinc-500">
-                <span>Relevance: {Math.round((topic.relevance_score || 0) * 100)}%</span>
-                {topic.sources && topic.sources.length > 0 && (
-                  <span>{topic.sources.length} sources</span>
-                )}
-                {hasId && <span className="text-green-400">✓ Has ID</span>}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-zinc-500">
+                  <span>Relevance: {Math.round((topic.relevance_score || 0) * 100)}%</span>
+                  {topic.sources && topic.sources.length > 0 && (
+                    <span>{topic.sources.length} sources</span>
+                  )}
+                  {isSaved && (
+                    <span className="text-green-600 dark:text-green-400 font-medium">✓ Saved</span>
+                  )}
+                </div>
+                <button
+                  onClick={(e) => handleSaveForLater(topic, e)}
+                  disabled={isLoading || !!topicBeingUsed || isSavingThis || isSaved}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingThis ? "Saving..." : isSaved ? "Saved" : "Save for Later"}
+                </button>
               </div>
-              {!hasId && (
-                <p className="text-red-600 dark:text-red-400 text-xs mt-2">⚠️ Topic missing ID - cannot be selected</p>
-              )}
-              {isLoading && (
-                <p className="text-blue-600 dark:text-blue-400 text-xs mt-2">⏳ Loading...</p>
-              )}
-            </button>
+            </div>
           );
         })}
       </div>

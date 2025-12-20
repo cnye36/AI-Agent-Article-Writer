@@ -1,4 +1,12 @@
-export async function generateImage(prompt: string, aspectRatio: "1:1" | "16:9" | "4:3" = "16:9") {
+export type ImageModel = "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+export type ImageQuality = "low" | "medium" | "high";
+
+export async function generateImage(
+  prompt: string,
+  aspectRatio: "1:1" | "16:9" | "4:3" = "16:9",
+  model: ImageModel = "gpt-image-1-mini",
+  quality: ImageQuality = "high"
+) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return { success: false, error: "Missing OPENAI_API_KEY" };
@@ -16,12 +24,12 @@ export async function generateImage(prompt: string, aspectRatio: "1:1" | "16:9" 
   
   try {
     const requestBody = {
-      model: "gpt-image-1-mini",
+      model: model,
       prompt: prompt,
       n: 1,
       size: size,
       output_format: "png" as const, // GPT image models return base64 by default
-      quality: "high",
+      quality: quality,
     };
 
     console.log("OpenAI image generation request:", { model: requestBody.model, size: requestBody.size, promptLength: prompt.length });

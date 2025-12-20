@@ -6,7 +6,23 @@ import { generateText } from "ai";
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, sectionContent, context, articleId, isCover, articleTitle } = await req.json();
+    const {
+      prompt,
+      sectionContent,
+      context,
+      articleId,
+      isCover,
+      articleTitle,
+      model = "gpt-image-1-mini",
+      quality = "high",
+    } = await req.json();
+
+    console.log(
+      "Image generation API called with model:",
+      model,
+      "quality:",
+      quality
+    );
 
     let imagePrompt = prompt;
 
@@ -84,7 +100,7 @@ Output ONLY the prompt, no explanation.`,
       );
     }
 
-    const result = await generateImage(imagePrompt);
+    const result = await generateImage(imagePrompt, "16:9", model, quality);
 
     if (!result.success) {
       console.error("Image generation failed:", result.error);

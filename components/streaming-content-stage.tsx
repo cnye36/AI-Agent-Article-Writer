@@ -97,12 +97,14 @@ export function StreamingContentStage({
               </div>
               <div className="flex-1">
                 <p className="text-blue-400 font-medium">{progress.message}</p>
-                {progress.stage === "section" && progress.section && progress.total && (
-                  <p className="text-xs text-zinc-500 mt-1">
-                    Section {progress.section} of {progress.total}
-                    {progress.sectionTitle && `: ${progress.sectionTitle}`}
-                  </p>
-                )}
+                {progress.stage === "section" &&
+                  progress.section &&
+                  progress.total && (
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Section {progress.section} of {progress.total}
+                      {progress.sectionTitle && `: ${progress.sectionTitle}`}
+                    </p>
+                  )}
               </div>
             </div>
           </div>
@@ -113,17 +115,20 @@ export function StreamingContentStage({
       {hasContent && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-zinc-400">Live Preview</h3>
-            <div className="text-sm text-zinc-500">
-              {fullArticle.split(/\s+/).filter((w) => w.length > 0).length} words
+            <h3 className="text-lg font-semibold text-zinc-700 dark:text-zinc-400">
+              Live Preview
+            </h3>
+            <div className="text-sm text-zinc-600 dark:text-zinc-500">
+              {fullArticle.split(/\s+/).filter((w) => w.length > 0).length}{" "}
+              words
             </div>
           </div>
 
-          <div className="prose prose-invert max-w-none bg-zinc-900/50 p-6 rounded-xl border border-zinc-800">
+          <div className="prose prose-invert max-w-none bg-blue-50 dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
             {/* Hook */}
             {content.hook && (
               <div className="mb-6">
-                <div className="whitespace-pre-wrap text-zinc-300 leading-relaxed">
+                <div className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-300 leading-relaxed">
                   {content.hook}
                   {progress?.stage === "hook" && (
                     <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
@@ -135,7 +140,7 @@ export function StreamingContentStage({
             {/* Sections */}
             {content.sections.map((section, index) => (
               <div key={index} className="mb-6">
-                <div className="whitespace-pre-wrap text-zinc-300 leading-relaxed">
+                <div className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-300 leading-relaxed">
                   {section}
                   {progress?.stage === "section" &&
                     content.currentSection === index && (
@@ -148,7 +153,7 @@ export function StreamingContentStage({
             {/* Conclusion */}
             {content.conclusion && (
               <div className="mb-6">
-                <div className="whitespace-pre-wrap text-zinc-300 leading-relaxed">
+                <div className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-300 leading-relaxed">
                   {content.conclusion}
                   {progress?.stage === "conclusion" && (
                     <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
@@ -172,9 +177,7 @@ export function StreamingContentStage({
               <p className="text-green-400 font-medium mb-2">
                 Article saved successfully!
               </p>
-              <p className="text-sm text-zinc-400">
-                Redirecting to editor...
-              </p>
+              <p className="text-sm text-zinc-400">Redirecting to editor...</p>
             </div>
           )}
         </div>

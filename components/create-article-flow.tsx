@@ -45,6 +45,7 @@ export function CreateArticleFlow({
     isLoading,
     goToStage,
     error,
+    handleSaveSelected,
   } = useArticleGeneration();
 
   // Streaming writer for real-time article generation
@@ -218,6 +219,7 @@ export function CreateArticleFlow({
             console.log("TopicsStage onSelect called with:", topic);
             selectTopic(topic);
           }}
+          onSaveSelected={handleSaveSelected}
           onBack={() => goToStage("config")}
         />
       )}
@@ -825,6 +827,54 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
             );
           })}
         </div>
+      </div>
+
+      {/* Optional Word Count Selector */}
+      <div>
+        <h2 className="text-lg font-semibold mb-4">Word Count (Optional)</h2>
+        <p className="text-sm text-slate-600 dark:text-zinc-400 mb-4">
+          Specify a custom word count, or leave empty to use the optimal word count for the selected article type.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => {
+              onChange({
+                ...config,
+                wordCount: undefined, // Clear custom word count to use optimal
+              });
+            }}
+            className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+              !config.wordCount
+                ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-slate-900 dark:text-white shadow-sm font-medium"
+                : "border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-600"
+            }`}
+          >
+            Optimal (Default)
+          </button>
+          {[250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2500, 3000].map((count) => (
+            <button
+              key={count}
+              onClick={() => {
+                onChange({
+                  ...config,
+                  wordCount: count,
+                });
+              }}
+              className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                config.wordCount === count
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-slate-900 dark:text-white shadow-sm font-medium"
+                  : "border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-600"
+              }`}
+            >
+              {count.toLocaleString()} words
+            </button>
+          ))}
+        </div>
+        {config.wordCount && (
+          <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+            ✓ Custom word count: {config.wordCount.toLocaleString()} words will be used instead of the optimal length.
+          </p>
+        )}
       </div>
 
       {/* Direct Mode Inputs for Tutorial/Affiliate/Personal */}

@@ -36,6 +36,24 @@ export default function ArticlePage() {
   const [activeTab, setActiveTab] = useState<"edit" | "settings">("edit");
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [selectedImage, setSelectedImage] = useState<ArticleImage | null>(null);
+  const [imageModel, setImageModel] = useState<"gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini">("gpt-image-1-mini");
+  const [imageQuality, setImageQuality] = useState<"low" | "medium" | "high">("high");
+
+  // Wrapper to ensure state updates and log changes
+  const handleImageModelChange = useCallback((model: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini") => {
+    console.log("🔄 [ArticlePage] handleImageModelChange called with:", model);
+    console.log("🔄 [ArticlePage] Current imageModel before update:", imageModel);
+    setImageModel(model);
+    // Log after a brief delay to see if state updated
+    setTimeout(() => {
+      console.log("🔄 [ArticlePage] State should now be:", model);
+    }, 0);
+  }, [imageModel]);
+
+  // Debug: Log when imageModel changes
+  useEffect(() => {
+    console.log("🔄 [ArticlePage] imageModel state changed to:", imageModel);
+  }, [imageModel]);
 
   // Save article content
   const handleSave = useCallback(
@@ -250,23 +268,43 @@ export default function ArticlePage() {
     [article, images]
   );
 
-  const handleGenerateCoverImage = async () => {
+  const handleGenerateCoverImage = async (params?: {
+    model?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+    quality?: "low" | "medium" | "high";
+  }) => {
     if (!article) return;
+
+    // Use model/quality from params if provided, otherwise use the shared state
+    // Since we now have a single shared state, params should match the state, but we'll use params if explicitly provided
+    const model = params?.model || imageModel;
+    const quality = params?.quality || imageQuality;
+
+    console.log("🖼️ [Cover Image] handleGenerateCoverImage called");
+    console.log("🖼️ [Cover Image] params received:", params);
+    console.log("🖼️ [Cover Image] page imageModel state:", imageModel);
+    console.log("🖼️ [Cover Image] Using model:", model, "quality:", quality);
 
     setIsGeneratingImage(true);
     try {
+      const requestBody = {
+        articleTitle: article.title,
+        sectionContent: article.excerpt || article.content.substring(0, 1000),
+        context: `Article Industry: ${
+          article.industries?.name || "General"
+        }. Article Type: ${article.article_type}`,
+        articleId: article.id,
+        isCover: true,
+        model: model,
+        quality: quality,
+      };
+
+      console.log("🖼️ [Cover Image] Request body:", JSON.stringify(requestBody, null, 2));
+      console.log("🖼️ [Cover Image] Sending model:", requestBody.model);
+
       const response = await fetch("/api/ai/generate-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          articleTitle: article.title,
-          sectionContent: article.excerpt || article.content.substring(0, 1000),
-          context: `Article Industry: ${
-            article.industries?.name || "General"
-          }. Article Type: ${article.article_type}`,
-          articleId: article.id,
-          isCover: true,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) throw new Error("Failed to generate image");
@@ -381,7 +419,7 @@ export default function ArticlePage() {
             <h1 className="text-xl font-bold">Content Studio</h1>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
               <nav className="flex gap-1 bg-slate-100 dark:bg-zinc-900 rounded-lg p-1 w-full sm:w-auto">
-                {["create", "topics", "library"].map((tab) => (
+                {["create", "topics", "library", "published"].map((tab) => (
                   <button
                     key={tab}
                     onClick={() => router.push(`/dashboard?tab=${tab}`)}
@@ -426,6 +464,10 @@ export default function ArticlePage() {
               isGeneratingCoverImage={isGeneratingImage}
               images={images}
               onSetCoverImage={handleSetCoverImage}
+              imageModel={imageModel}
+              imageQuality={imageQuality}
+              onImageModelChange={handleImageModelChange}
+              onImageQualityChange={setImageQuality}
               onImagesChange={async () => {
                 // Refresh images without full page reload
                 const response = await fetch(`/api/articles?id=${article.id}`);
@@ -474,6 +516,10 @@ export default function ArticlePage() {
               onImageClose={() => setSelectedImage(null)}
               onImageNavigate={handleImageNavigate}
               onDelete={handleDelete}
+              imageModel={imageModel}
+              imageQuality={imageQuality}
+              onImageModelChange={handleImageModelChange}
+              onImageQualityChange={setImageQuality}
             />
           )}
         </main>

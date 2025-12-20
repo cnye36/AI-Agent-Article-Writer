@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import type { Article, ArticleImage } from "@/types";
 
@@ -24,10 +26,29 @@ export function ImageLightbox({
   const prevIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1;
   const nextIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0;
 
-  return (
+  // Handle Escape key to close modal and prevent body scroll
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = "hidden";
+
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = "unset";
+    };
+  }, [onClose]);
+
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
       onClick={onClose}
+      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}
     >
       <div className="relative w-full h-full max-w-7xl max-h-[90vh] flex items-center justify-center">
         {/* Close button */}
@@ -59,11 +80,14 @@ export function ImageLightbox({
           <div className="relative w-full h-full max-w-full max-h-full min-h-0 flex items-center justify-center">
             {selectedImage.url.startsWith("data:") ? (
               // Use regular img tag for data URLs as Next.js Image can have issues
-              <img
+              <Image
                 src={selectedImage.url}
                 alt={selectedImage.prompt || "Generated Image"}
-                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                style={{ maxHeight: "90vh" }}
+                fill
+                className="object-contain rounded-lg shadow-2xl"
+                unoptimized
+                sizes="(max-width: 1280px) 100vw, 1280px"
+                priority
               />
             ) : (
               <div className="relative w-full h-full">
@@ -102,17 +126,27 @@ export function ImageLightbox({
                 </span>
               )}
             </div>
-            {article.cover_image !== selectedImage.url && (
+            {/* Show "Set as Cover" button for ANY image that isn't already the cover */}
+            {article.cover_image !== selectedImage.url ? (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  console.log(
+                    "🖼️ [ImageLightbox] Setting image as cover:",
+                    selectedImage.id
+                  );
                   onSetCoverImage(selectedImage.id);
                   onClose();
                 }}
                 className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-medium text-white transition-colors whitespace-nowrap"
+                title="Set this image as the article cover image"
               >
                 Set as Cover
               </button>
+            ) : (
+              <span className="px-3 py-1.5 bg-green-600/20 text-green-400 rounded-lg text-xs font-medium whitespace-nowrap border border-green-600/30">
+                ✓ Cover Image
+              </span>
             )}
           </div>
         </div>
@@ -169,5 +203,12 @@ export function ImageLightbox({
       </div>
     </div>
   );
+
+  // Render modal using portal to document body to ensure it's always on top
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return createPortal(modalContent, document.body);
 }
 

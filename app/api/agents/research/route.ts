@@ -135,15 +135,18 @@ export async function POST(request: NextRequest) {
     // Filter out definite duplicates (>90% similar)
     const uniqueTopics = topicsWithSimilarity.filter((topic) => !topic.isDuplicate);
 
-    // Save discovered topics to database
-    const topicsToInsert = uniqueTopics.map((topic) => ({
+    // Return topics WITHOUT saving them - user will select which ones to save
+    // Add temporary IDs so they can be referenced in the UI
+    const topicsWithTempIds = uniqueTopics.map((topic, index) => ({
+      id: `temp-${Date.now()}-${index}`, // Temporary ID until saved
       title: topic.title,
       summary: topic.summary,
       industry_id: industryId,
-      sources: topic.sources,
-      relevance_score: topic.relevanceScore,
+      sources: topic.sources || [],
+      relevance_score: topic.relevanceScore || 0,
       status: "pending" as const,
-      embedding: topic.embedding, // Save the embedding vector
+      discovered_at: new Date().toISOString(),
+      embedding: topic.embedding, // Keep embedding for saving later
       metadata: {
         angle: topic.angle,
         hook: topic.hook, // Save the hook for use in outline/article generation
@@ -151,55 +154,34 @@ export async function POST(request: NextRequest) {
         searchKeywords: searchKeywords.slice(0, 5),
         similarTopics: topic.similarTopics, // Store similar topics for reference
         articleType: articleType, // Store the article type used for this topic
+        temporary: true, // Mark as temporary until saved
+        // Store full topic data for saving later
+        _topicData: {
+          title: topic.title,
+          summary: topic.summary,
+          industry_id: industryId,
+          sources: topic.sources,
+          relevance_score: topic.relevanceScore,
+          embedding: topic.embedding,
+          angle: topic.angle,
+          hook: topic.hook,
+        },
       },
     }));
-
-    const { data: savedTopics, error: insertError } = await supabase
-      .from("topics")
-      .insert(topicsToInsert as any)
-      .select();
-
-    if (insertError) {
-      console.error("Error saving topics:", insertError);
-      // Still return the topics even if save fails, but add temporary IDs
-      // so they can still be used (though they won't persist)
-      const topicsWithTempIds = result.discoveredTopics.map((topic, index) => ({
-        id: `temp-${Date.now()}-${index}`, // Temporary ID
-        title: topic.title,
-        summary: topic.summary,
-        industry_id: industryId,
-        sources: topic.sources || [],
-        relevance_score: topic.relevanceScore || 0,
-        status: "pending" as const,
-        discovered_at: new Date().toISOString(),
-        metadata: {
-          angle: topic.angle,
-          discoveredAt: new Date().toISOString(),
-          searchKeywords: searchKeywords.slice(0, 5),
-          temporary: true, // Mark as temporary
-        },
-      }));
-      
-      return NextResponse.json({
-        success: true,
-        topics: topicsWithTempIds,
-        saved: false,
-        error: "Failed to save topics to database",
-        warning: "Topics have temporary IDs and may not persist",
-      });
-    }
 
     // Include metadata about duplicates filtered
     const duplicatesFiltered = topicsWithSimilarity.filter((t) => t.isDuplicate);
 
     return NextResponse.json({
       success: true,
-      topics: savedTopics || [],
+      topics: topicsWithTempIds,
+      saved: false, // Topics are not saved yet - user must select which ones to save
       metadata: {
         industry: industryForDb,
+        industryId: industryId, // Include industry ID for saving later
         keywordsUsed: searchKeywordsForAgent.slice(0, 10),
         existingArticlesChecked: 0, // We now use vector search for deduplication
-        topicsDiscovered: (savedTopics || []).length,
+        topicsDiscovered: topicsWithTempIds.length,
         duplicatesFiltered: duplicatesFiltered.length,
         duplicates: duplicatesFiltered.map((d) => ({
           title: d.title,

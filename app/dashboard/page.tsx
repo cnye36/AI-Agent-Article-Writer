@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { TopicFeed } from "@/components/topic-feed";
 import { ArticleLibrary } from "@/components/article-library";
 import { CreateArticleFlow } from "@/components/create-article-flow";
+import { PublicationCalendar } from "@/components/publication-calendar";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserNav } from "@/components/user-nav";
@@ -16,15 +17,15 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   // Initialize activeTab from URL parameter
-  const getInitialTab = (): "create" | "topics" | "library" => {
+  const getInitialTab = (): "create" | "topics" | "library" | "published" => {
     const tabParam = searchParams.get("tab");
-    if (tabParam && ["create", "topics", "library"].includes(tabParam)) {
-      return tabParam as "create" | "topics" | "library";
+    if (tabParam && ["create", "topics", "library", "published"].includes(tabParam)) {
+      return tabParam as "create" | "topics" | "library" | "published";
     }
     return "create";
   };
 
-  const [activeTab, setActiveTab] = useState<"create" | "topics" | "library">(
+  const [activeTab, setActiveTab] = useState<"create" | "topics" | "library" | "published">(
     getInitialTab()
   );
   const [selectedTopicFromFeed, setSelectedTopicFromFeed] =
@@ -33,15 +34,15 @@ function DashboardContent() {
   // Handle tab query parameter changes
   useEffect(() => {
     const tabParam = searchParams.get("tab");
-    if (tabParam && ["create", "topics", "library"].includes(tabParam)) {
+    if (tabParam && ["create", "topics", "library", "published"].includes(tabParam)) {
       setTimeout(() => {
-        setActiveTab(tabParam as "create" | "topics" | "library");
+        setActiveTab(tabParam as "create" | "topics" | "library" | "published");
       }, 0);
     }
   }, [searchParams]);
 
   // Update URL when tab changes
-  const handleTabChange = (tab: "create" | "topics" | "library") => {
+  const handleTabChange = (tab: "create" | "topics" | "library" | "published") => {
     setActiveTab(tab);
     router.push(`/dashboard?tab=${tab}`);
   };
@@ -77,11 +78,11 @@ function DashboardContent() {
           <h1 className="text-xl font-bold">Content Studio</h1>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
             <nav className="flex gap-1 bg-slate-100 dark:bg-zinc-900 rounded-lg p-1 w-full sm:w-auto">
-              {["create", "topics", "library"].map((tab) => (
+              {["create", "topics", "library", "published"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() =>
-                    handleTabChange(tab as "create" | "topics" | "library")
+                    handleTabChange(tab as "create" | "topics" | "library" | "published")
                   }
                   className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                     activeTab === tab
@@ -102,7 +103,7 @@ function DashboardContent() {
       </header>
 
       {/* Content */}
-      <main className="p-4 sm:p-6">
+      <main className={activeTab === "published" ? "flex flex-col flex-1 overflow-hidden" : "p-4 sm:p-6"}>
         {activeTab === "create" && (
           <CreateArticleFlow
             initialTopic={selectedTopicFromFeed}
@@ -118,6 +119,7 @@ function DashboardContent() {
             onEditArticle={(article) => router.push(`/article/${article.id}`)}
           />
         )}
+        {activeTab === "published" && <PublicationCalendar />}
       </main>
     </div>
   );

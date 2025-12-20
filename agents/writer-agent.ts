@@ -185,7 +185,12 @@ export function createWriterAgent() {
 
         // Import dynamically to avoid circular deps if any, or just standard import
         const { generateImage } = await import("@/lib/ai/image-generation");
-        const imageResult = await generateImage(prompt, "16:9");
+        const imageResult = await generateImage(
+          prompt,
+          "16:9",
+          "gpt-image-1-mini",
+          "high"
+        );
 
         if (imageResult.success && imageResult.image) {
           return { coverImage: `data:image/png;base64,${imageResult.image}` };

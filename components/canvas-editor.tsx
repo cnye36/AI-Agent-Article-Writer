@@ -6,7 +6,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
-import Image from "@tiptap/extension-image";
+import { ImageWithRemove } from "@/lib/tiptap-extensions/image-with-remove";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { markdownToTiptap, tiptapToMarkdown } from "@/lib/markdown";
 import { LoadingMark } from "@/lib/tiptap-extensions/loading-mark";
@@ -24,7 +24,10 @@ interface CanvasEditorProps {
   articleTitle?: string;
   onSave: (content: string) => Promise<void>;
   onPublish?: () => Promise<void>;
-  onGenerateCoverImage?: () => Promise<void>;
+  onGenerateCoverImage?: (params?: {
+    model?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+    quality?: "low" | "medium" | "high";
+  }) => Promise<void>;
   isGeneratingCoverImage?: boolean;
   images?: Array<{
     id: string;
@@ -35,6 +38,10 @@ interface CanvasEditorProps {
   onSetCoverImage?: (imageId: string) => Promise<void>;
   onImagesChange?: () => void;
   onGenerateCoverImageComplete?: () => void;
+  imageModel?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+  imageQuality?: "low" | "medium" | "high";
+  onImageModelChange?: (model: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini") => void;
+  onImageQualityChange?: (quality: "low" | "medium" | "high") => void;
 }
 
 export function CanvasEditor({
@@ -50,6 +57,10 @@ export function CanvasEditor({
   onSetCoverImage,
   onImagesChange,
   onGenerateCoverImageComplete,
+  imageModel = "gpt-image-1-mini",
+  imageQuality = "high",
+  onImageModelChange,
+  onImageQualityChange,
 }: CanvasEditorProps) {
   const [selectedText, setSelectedText] = useState("");
   const [aiPanelOpen, setAiPanelOpen] = useState(true); // Visible by default on desktop
@@ -59,6 +70,8 @@ export function CanvasEditor({
   const [showMarkdown, setShowMarkdown] = useState(false);
   const [markdownContent, setMarkdownContent] = useState(initialContent);
   const [isTogglingView, setIsTogglingView] = useState(false);
+  const [isMobileView, setIsMobileView] = useState(false);
+  const [isEditorFocused, setIsEditorFocused] = useState(false);
   const [aiAction, setAiAction] = useState<
     "rewrite" | "expand" | "simplify" | "custom"
   >("rewrite");
@@ -73,6 +86,8 @@ export function CanvasEditor({
   const [completion, setCompletion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isRunningEditor, setIsRunningEditor] = useState(false);
+  const [editorStreamingContent, setEditorStreamingContent] = useState("");
   const [previewImage, setPreviewImage] = useState<{
     src: string;
     alt: string;
@@ -169,10 +184,10 @@ export function CanvasEditor({
     extensions: [
       StarterKit, // Includes markdown shortcuts by default (e.g., **bold**, *italic*, # heading)
       Underline,
-      Image.configure({
+      ImageWithRemove.configure({
         HTMLAttributes: {
           class:
-            "rounded-lg cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all max-w-full",
+            "rounded-lg cursor-move hover:ring-2 hover:ring-blue-500 transition-all max-w-full",
         },
       }),
       Link.configure({
@@ -200,15 +215,19 @@ export function CanvasEditor({
       }
     },
     editorProps: {
+      handleDOMEvents: {
+        focus: () => {
+          setIsEditorFocused(true);
+          return false;
+        },
+        blur: () => {
+          setIsEditorFocused(false);
+          return false;
+        },
+      },
       handleClick: (view, pos, event) => {
-        // Check if clicked element is an image
-        const target = event.target as HTMLElement;
-        if (target.tagName === "IMG") {
-          event.preventDefault();
-          const img = target as HTMLImageElement;
-          setPreviewImage({ src: img.src, alt: img.alt || "Image" });
-          return true;
-        }
+        // Images in canvas are not clickable - they can only be moved or removed
+        // Clicking on images does nothing (no preview modal)
         return false;
       },
       handleDrop: (view, event, slice, moved) => {
@@ -223,7 +242,59 @@ export function CanvasEditor({
           return false;
         }
 
-        // Check for custom data transfer with image URL first (most reliable)
+        // Check if image is being dragged from canvas (to sidebar)
+        const fromCanvas = dataTransfer?.getData("image/from-canvas");
+        if (fromCanvas === "true") {
+          // Image is being dragged from canvas - if dropped outside editor, remove it
+          // This will be handled by the dragend event
+          return false;
+        }
+
+        // Check if this is a move operation (dragging content within the editor)
+        if (moved) {
+          // Check if we're moving an image that already exists in the document
+          if (slice && slice.content) {
+            let hasImage = false;
+            let imageSrc = "";
+            
+            // Check if slice contains an image
+            slice.content.forEach((node) => {
+              if (node.type && node.type.name === "image") {
+                hasImage = true;
+                imageSrc = node.attrs?.src || "";
+              }
+              if (node.content) {
+                node.content.forEach((child) => {
+                  if (child.type && child.type.name === "image") {
+                    hasImage = true;
+                    imageSrc = child.attrs?.src || "";
+                  }
+                });
+              }
+            });
+
+            // If moving an existing image, check if it's already in the document
+            if (hasImage && imageSrc && editor) {
+              let imageExists = false;
+              view.state.doc.descendants((node) => {
+                if (node.type.name === "image" && node.attrs?.src === imageSrc) {
+                  imageExists = true;
+                  return false; // Stop searching
+                }
+              });
+
+              // If image exists, let TipTap handle the move (it will move, not duplicate)
+              if (imageExists) {
+                return false; // Let TipTap handle the move
+              }
+            }
+          }
+          
+          // For other move operations, let TipTap handle it
+          return false;
+        }
+
+        // Handle new image drops from sidebar (only when not moving existing content)
         const imageUrl = dataTransfer?.getData("image/url");
         const imageAlt =
           dataTransfer?.getData("image/alt") || "Generated Image";
@@ -245,6 +316,21 @@ export function CanvasEditor({
         }
 
         if (imgSrc && editor) {
+          // Check if this image already exists in the document
+          // If it does, this might be a move operation that wasn't caught by the moved flag
+          let imageAlreadyExists = false;
+          view.state.doc.descendants((node, nodePos) => {
+            if (node.type.name === "image" && node.attrs?.src === imgSrc) {
+              imageAlreadyExists = true;
+              return false; // Stop searching
+            }
+          });
+
+          // If image already exists, don't insert it again (let TipTap handle it if it's a move)
+          if (imageAlreadyExists) {
+            return false; // Let TipTap handle it or ignore if it's a duplicate drop
+          }
+
           event.preventDefault();
 
           // Get drop position
@@ -293,6 +379,44 @@ export function CanvasEditor({
       },
     },
   });
+
+  // Handle drag from canvas to sidebar - remove image from canvas when dropped on sidebar
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleDrop = (e: DragEvent) => {
+      const fromCanvas = e.dataTransfer?.getData("image/from-canvas");
+      if (fromCanvas !== "true") return;
+
+      const target = e.target as HTMLElement;
+      // Check if dropped on sidebar (ImageLibrary area)
+      if (target.closest(".image-library-container") ||
+          target.closest('[class*="ImageLibrary"]') ||
+          target.closest('[class*="image-library"]')) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Get stored position from dataTransfer
+        const pos = (e.dataTransfer as any)?.canvasImagePos;
+        const size = (e.dataTransfer as any)?.canvasImageSize;
+
+        if (pos !== null && pos !== undefined && editor) {
+          // Remove image from canvas
+          const actualSize = size || editor.state.doc.nodeAt(pos)?.nodeSize || 1;
+          editor.chain().focus().deleteRange({
+            from: pos,
+            to: pos + actualSize
+          }).run();
+        }
+      }
+    };
+
+    document.addEventListener("drop", handleDrop, true);
+
+    return () => {
+      document.removeEventListener("drop", handleDrop, true);
+    };
+  }, [editor]);
 
   // Update editor content when initialContent changes (e.g., during article generation)
   useEffect(() => {
@@ -613,18 +737,36 @@ export function CanvasEditor({
     setTimeout(() => setIsTogglingView(false), 75);
   }, [showMarkdown, editor, isTogglingView]);
 
+  const handleToggleMobileView = useCallback(() => {
+    setIsMobileView((prev) => !prev);
+  }, []);
+
   const handleGenerateImage = useCallback(
-    async (params?: { prompt?: string; sectionContent?: string }) => {
+    async (params?: { 
+      prompt?: string; 
+      sectionContent?: string;
+      model?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+      quality?: "low" | "medium" | "high";
+    }) => {
+      console.log("🚀 handleGenerateImage CALLED with params:", params);
+      console.log("🚀 params?.model:", params?.model);
+      
       // If no params provided, try to use selected text (default behavior for selection menu)
       const requestBody = params || { sectionContent: selectedText };
 
       if (!requestBody.prompt && !requestBody.sectionContent) {
-        if (!selectedText) return;
+        if (!selectedText) {
+          console.log("🚀 Early return: no selectedText");
+          return;
+        }
         // Fallback for button click without args
         requestBody.sectionContent = selectedText;
       }
 
-      if (!editor) return;
+      if (!editor) {
+        console.log("🚀 Early return: no editor");
+        return;
+      }
 
       // Switch to image tab when generating images
       setAiAssistantTab("image");
@@ -633,16 +775,38 @@ export function CanvasEditor({
       setIsGeneratingImage(true);
 
       try {
+        // Extract model and quality from params if provided, otherwise use defaults
+        // CRITICAL: Always check params.model first, never use requestBody.model as it might be stale
+        const model = params?.model || "gpt-image-1-mini";
+        const quality = params?.quality || "high";
+
+        console.log("🚀 [Image Gen] Inside try block");
+        console.log("🚀 [Image Gen] params object:", params);
+        console.log("🚀 [Image Gen] params?.model value:", params?.model);
+        console.log("🚀 [Image Gen] Extracted model:", model, "quality:", quality);
+
+        // Build request payload - explicitly set model and quality to ensure they're correct
+        const requestPayload = {
+          prompt: requestBody.prompt,
+          sectionContent: requestBody.sectionContent,
+          articleId: articleId,
+          articleTitle: articleTitle,
+          isCover: false,
+          model: model, // CRITICAL: Use extracted model, not requestBody.model
+          quality: quality, // CRITICAL: Use extracted quality, not requestBody.quality
+        };
+
+        console.log("🚀 [Image Gen] Final payload:", JSON.stringify(requestPayload, null, 2));
+        console.log("🚀 [Image Gen] Final payload model:", requestPayload.model);
+        console.log("🚀 [Image Gen] About to send fetch request...");
+
         const response = await fetch("/api/ai/generate-image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...requestBody,
-            articleId: articleId, // Include articleId to save image to database
-            articleTitle: articleTitle, // Include article title for better prompts
-            isCover: false, // Regular images are not cover images
-          }),
+          body: JSON.stringify(requestPayload),
         });
+        
+        console.log("🚀 [Image Gen] Fetch response received, status:", response.status);
 
         if (!response.ok) throw new Error("Failed to generate image");
 
@@ -684,7 +848,9 @@ export function CanvasEditor({
             .run();
 
           // Refresh images list if callback provided
-          if (data.record && onImagesChange) {
+          // Call onImagesChange regardless of data.record to ensure images refresh
+          if (onImagesChange) {
+            console.log("🖼️ [CanvasEditor] Calling onImagesChange to refresh images");
             onImagesChange();
           }
         }
@@ -699,17 +865,127 @@ export function CanvasEditor({
   );
 
   // Wrapper for cover image generation that switches to image tab
-  const handleGenerateCoverImage = useCallback(async () => {
+  const handleGenerateCoverImage = useCallback(async (params?: {
+    model?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+    quality?: "low" | "medium" | "high";
+  }) => {
     // Switch to image tab when generating cover
     setAiAssistantTab("image");
+    console.log("🎨 [CanvasEditor] handleGenerateCoverImage called with params:", params);
     if (onGenerateCoverImage) {
-      await onGenerateCoverImage();
+      await onGenerateCoverImage(params);
       // Refresh images after cover image generation
       if (onGenerateCoverImageComplete) {
         await onGenerateCoverImageComplete();
       }
     }
   }, [onGenerateCoverImage, onGenerateCoverImageComplete]);
+
+  const handleRunEditor = useCallback(async () => {
+    if (!editor || !articleId) return;
+
+    setIsRunningEditor(true);
+    
+    // Cancel any existing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    try {
+      // Get current content from editor
+      const currentContent = tiptapToMarkdown(editor.getJSON());
+
+      // Save current version before editing (for rollback)
+      // This is done automatically by the API, but we'll track it here too
+      const originalContent = currentContent;
+
+      const response = await fetch("/api/agents/editor", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          articleId,
+          content: currentContent,
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      if (!response.body) {
+        throw new Error("No response body");
+      }
+
+      // Stream the edited content
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulatedContent = "";
+      let hasReceivedFirstToken = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.type === "token" && data.content) {
+                if (!hasReceivedFirstToken) {
+                  // Clear editor when first token arrives to show skeleton
+                  editor.commands.setContent("");
+                  hasReceivedFirstToken = true;
+                }
+                
+                accumulatedContent += data.content;
+                setEditorStreamingContent(accumulatedContent);
+                
+                // Update editor in real-time as content streams in
+                editor.commands.setContent(markdownToTiptap(accumulatedContent));
+              } else if (data.type === "complete") {
+                // Final save
+                await onSave(accumulatedContent);
+                console.log("Article edited successfully by editor agent", {
+                  wordCount: data.wordCount,
+                  originalWordCount: data.originalWordCount,
+                });
+              } else if (data.type === "error") {
+                throw new Error(data.message || "Editor agent error");
+              }
+            } catch (parseError) {
+              console.error("Error parsing SSE data:", parseError);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error running editor agent:", error);
+      
+      // Restore original content on error (if we have it)
+      if (editor && !(error instanceof Error && error.name === "AbortError")) {
+        const currentContent = tiptapToMarkdown(editor.getJSON());
+        if (!currentContent || currentContent.trim().length === 0) {
+          // If editor was cleared, try to restore from last saved content
+          // The API should have saved a version before editing
+        }
+      }
+    } finally {
+      setIsRunningEditor(false);
+      setEditorStreamingContent("");
+    }
+  }, [editor, articleId, onSave]);
 
   return (
     <div className="flex flex-col lg:flex-row h-full relative">
@@ -734,6 +1010,8 @@ export function CanvasEditor({
                 setShowLinkInput(false);
                 setLinkUrl("");
               }}
+              isMobileView={isMobileView}
+              onToggleMobileView={handleToggleMobileView}
             />
           )}
 
@@ -750,13 +1028,42 @@ export function CanvasEditor({
 
           {/* Editor Content */}
           <div className="px-4 sm:px-6 lg:px-8 pb-12 pt-6">
-            <div className="max-w-3xl mx-auto">
-              <div className="relative min-h-[400px] sm:min-h-[500px] lg:min-h-[600px]">
+            <div className={`mx-auto transition-all duration-300 ${
+              isMobileView ? "max-w-[414px]" : "max-w-3xl"
+            }`}>
+              <div className={`relative min-h-[400px] sm:min-h-[500px] lg:min-h-[600px] ${
+                isMobileView ? "mobile-view-container" : "desktop-view-container"
+              } ${!isMobileView && isEditorFocused ? "desktop-view-focused" : ""}`}>
+                {/* Editor Skeleton Overlay - Shows while streaming, fades out as content appears */}
+                {isRunningEditor && !editorStreamingContent && (
+                  <div className="absolute inset-0 z-10 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm rounded-lg">
+                    <div className="p-6 space-y-4 animate-pulse">
+                      {/* Skeleton lines */}
+                      {[...Array(8)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-4 bg-slate-200 dark:bg-zinc-800 rounded"
+                          style={{
+                            width: `${Math.random() * 40 + 60}%`,
+                            animationDelay: `${i * 100}ms`,
+                          }}
+                        />
+                      ))}
+                      {/* Pulsing indicator */}
+                      <div className="flex items-center gap-2 mt-6">
+                        <div className="h-2 w-2 bg-purple-600 rounded-full animate-pulse" />
+                        <span className="text-sm text-slate-600 dark:text-zinc-400">
+                          Editor agent is refining your content...
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {/* Keep TipTap mounted to avoid DOM teardown races (BubbleMenu/Tippy + ProseMirror) */}
                 <div className={showMarkdown ? "hidden" : ""}>
                   <EditorContent
                     editor={editor}
-                    className="editor-content min-h-[400px] sm:min-h-[500px] lg:min-h-[600px] focus:outline-none"
+                    className="editor-content min-h-[400px] sm:min-h-[500px] lg:min-h-[600px]"
                   />
                 </div>
 
@@ -791,12 +1098,6 @@ export function CanvasEditor({
             <ImageBubbleMenu
               editor={editor}
               disabled={showMarkdown}
-              onView={() => {
-                if (editor) {
-                  const { src, alt } = editor.getAttributes("image");
-                  setPreviewImage({ src, alt: alt || "Image" });
-                }
-              }}
             />
           )}
         </div>
@@ -825,6 +1126,13 @@ export function CanvasEditor({
             isGeneratingImage={isGeneratingImage}
             activeTab={aiAssistantTab}
             onTabChange={setAiAssistantTab}
+            onRunEditor={handleRunEditor}
+            isRunningEditor={isRunningEditor}
+            articleId={articleId}
+            imageModel={imageModel}
+            imageQuality={imageQuality}
+            onImageModelChange={onImageModelChange}
+            onImageQualityChange={onImageQualityChange}
           />
         </div>
       </div>

@@ -42,6 +42,7 @@ interface UseArticleGenerationReturn {
   reset: () => void;
   goToStage: (stage: GenerationStage) => void;
   selectDifferentTopic: () => void;
+  handleSaveSelected: (savedTopics: Topic[]) => void;
 }
 
 const initialConfig: GenerationConfig = {
@@ -137,6 +138,27 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
     []
   );
 
+  // Handle saving selected topics
+  const handleSaveSelected = useCallback((savedTopics: Topic[]) => {
+    // Create a map of saved topics by their title (since IDs change from temp to real)
+    const savedTopicsByTitle = new Map(
+      savedTopics.map((t) => [t.title, t])
+    );
+    
+    // Update topics list: replace temporary topics with saved ones, keep unsaved ones
+    setTopics((prevTopics) => {
+      return prevTopics.map((topic) => {
+        // If this topic was saved (matches by title), replace with saved version
+        const savedTopic = savedTopicsByTitle.get(topic.title);
+        if (savedTopic) {
+          return savedTopic;
+        }
+        // Otherwise keep the original (unsaved) topic
+        return topic;
+      });
+    });
+  }, []);
+
   const selectTopic = useCallback(
     async (topic: Topic) => {
       if (!topic || !topic.id) {
@@ -172,6 +194,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
             targetLength: config.targetLength,
             tone: config.tone,
             customInstructions: config.customInstructions,
+            wordCount: config.wordCount,
           }),
         });
 
@@ -312,6 +335,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
           targetLength: config.targetLength,
           tone: config.tone,
           customInstructions: config.customInstructions,
+          wordCount: config.wordCount,
         }),
       });
 
@@ -573,6 +597,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
     reset,
     goToStage,
     selectDifferentTopic,
+    handleSaveSelected,
   };
 }
 

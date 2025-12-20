@@ -29,6 +29,12 @@ interface ArticleSettingsProps {
   onImageClose: () => void;
   onImageNavigate: (image: ArticleImage) => void;
   onDelete: () => void;
+  imageModel?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+  imageQuality?: "low" | "medium" | "high";
+  onImageModelChange?: (
+    model: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini"
+  ) => void;
+  onImageQualityChange?: (quality: "low" | "medium" | "high") => void;
 }
 
 export function ArticleSettings({
@@ -46,6 +52,10 @@ export function ArticleSettings({
   onImageClose,
   onImageNavigate,
   onDelete,
+  imageModel = "gpt-image-1-mini",
+  imageQuality = "high",
+  onImageModelChange,
+  onImageQualityChange,
 }: ArticleSettingsProps) {
   return (
     <div className="h-full overflow-y-auto p-8 bg-white dark:bg-zinc-950">
@@ -60,6 +70,10 @@ export function ArticleSettings({
           onSetCoverImage={onSetCoverImage}
           onDeleteImage={onDeleteImage}
           onImageClick={onImageClick}
+          imageModel={imageModel}
+          imageQuality={imageQuality}
+          onImageModelChange={onImageModelChange}
+          onImageQualityChange={onImageQualityChange}
         />
         <ArticleSEOSection article={article} onUpdate={onUpdate} />
         <ArticlePublishingSection article={article} onUpdate={onUpdate} />

@@ -19,6 +19,7 @@ const OutlineRequestSchema = z.object({
   targetLength: z.enum(["short", "medium", "long"]),
   tone: z.string().default("professional"),
   customInstructions: z.string().optional(),
+  wordCount: z.number().min(250).optional(), // Optional custom word count (min 250)
 });
 
 // Article type configurations
@@ -150,7 +151,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { topicId, articleType, targetLength, tone, customInstructions } =
+    const { topicId, articleType, targetLength, tone, customInstructions, wordCount } =
       validationResult.data;
 
     // Fetch the topic
@@ -185,10 +186,30 @@ export async function POST(request: NextRequest) {
 
     // Calculate section word targets
     const typeConfig = ARTICLE_TYPE_CONFIG[articleType];
-    const lengthConfig =
-      LENGTH_CONFIG[articleType]?.[targetLength] ||
-      LENGTH_CONFIG.blog[targetLength];
-    const sectionCount = typeConfig.sectionCount[targetLength];
+    
+    // Use custom word count if provided, otherwise use optimal length config
+    let lengthConfig: { min: number; target: number; max: number };
+    let sectionCount: number;
+    
+    if (wordCount) {
+      // Use custom word count - calculate reasonable min/max (±20% range)
+      const min = Math.round(wordCount * 0.8);
+      const max = Math.round(wordCount * 1.2);
+      lengthConfig = {
+        min,
+        target: wordCount,
+        max,
+      };
+      // Estimate section count based on word count (roughly 200-300 words per section)
+      const estimatedSections = Math.max(3, Math.round(wordCount / 250));
+      sectionCount = Math.min(estimatedSections, 15); // Cap at 15 sections
+    } else {
+      // Use optimal length config based on article type and targetLength
+      lengthConfig =
+        LENGTH_CONFIG[articleType]?.[targetLength] ||
+        LENGTH_CONFIG.blog[targetLength];
+      sectionCount = typeConfig.sectionCount[targetLength];
+    }
 
     // Initialize and run the outline agent
     const outlineAgent = createOutlineAgent();
@@ -580,7 +601,7 @@ export async function PUT(request: NextRequest) {
       });
     }
 
-    const { topicId, articleType, targetLength, tone, customInstructions } =
+    const { topicId, articleType, targetLength, tone, customInstructions, wordCount } =
       validationResult.data;
 
     // Fetch the topic
@@ -631,10 +652,30 @@ export async function PUT(request: NextRequest) {
 
     // Calculate section word targets
     const typeConfig = ARTICLE_TYPE_CONFIG[articleType];
-    const lengthConfig =
-      LENGTH_CONFIG[articleType]?.[targetLength] ||
-      LENGTH_CONFIG.blog[targetLength];
-    const sectionCount = typeConfig.sectionCount[targetLength];
+    
+    // Use custom word count if provided, otherwise use optimal length config
+    let lengthConfig: { min: number; target: number; max: number };
+    let sectionCount: number;
+    
+    if (wordCount) {
+      // Use custom word count - calculate reasonable min/max (±20% range)
+      const min = Math.round(wordCount * 0.8);
+      const max = Math.round(wordCount * 1.2);
+      lengthConfig = {
+        min,
+        target: wordCount,
+        max,
+      };
+      // Estimate section count based on word count (roughly 200-300 words per section)
+      const estimatedSections = Math.max(3, Math.round(wordCount / 250));
+      sectionCount = Math.min(estimatedSections, 15); // Cap at 15 sections
+    } else {
+      // Use optimal length config based on article type and targetLength
+      lengthConfig =
+        LENGTH_CONFIG[articleType]?.[targetLength] ||
+        LENGTH_CONFIG.blog[targetLength];
+      sectionCount = typeConfig.sectionCount[targetLength];
+    }
 
     // Create placeholder outline immediately
     const placeholderOutline = {

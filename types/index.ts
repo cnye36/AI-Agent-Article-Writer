@@ -177,6 +177,27 @@ export interface ArticlePublication {
   article?: Pick<Article, "id" | "title" | "slug">;
 }
 
+// Calendar Types
+export interface CalendarPublication extends ArticlePublication {
+  canonical_url: string; // Always computed for calendar view
+  article: {
+    id: string;
+    title: string;
+    slug: string;
+    excerpt: string | null;
+    article_type: ArticleType;
+    cover_image: string | null;
+  };
+  site: PublishingSite;
+}
+
+export type CalendarViewMode = "month" | "week" | "day";
+
+export interface CalendarDateRange {
+  startDate: Date;
+  endDate: Date;
+}
+
 // API Request/Response Types
 export interface ResearchRequest {
   industry: string;
@@ -301,6 +322,11 @@ export interface GenerationConfig {
   targetLength: TargetLength;
   tone: string;
   /**
+   * Optional custom word count. If provided, overrides optimal word count.
+   * Minimum: 250 words. Predefined options: 250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2500, 3000
+   */
+  wordCount?: number;
+  /**
    * How the user wants to define the topic:
    * - discover: use industry/keywords to discover topics
    * - direct: user provides an explicit topic/product set
@@ -384,7 +410,11 @@ export interface DiffChange {
 }
 
 // Job Types
-export type JobType = "write_article" | "generate_outline" | "research_topics";
+export type JobType =
+  | "write_article"
+  | "generate_outline"
+  | "research_topics"
+  | "edit_article";
 export type JobStatus =
   | "pending"
   | "running"
@@ -451,6 +481,20 @@ export interface GenerateOutlineJobInput {
 export interface GenerateOutlineJobOutput {
   outlineId: string;
   outline: Outline;
+}
+
+export interface EditArticleJobInput {
+  articleId: string;
+  content?: string; // If omitted, fetched from DB
+}
+
+export interface EditArticleJobOutput {
+  articleId: string;
+  article: Article;
+  metadata: {
+    wordCount: number;
+    changesMade: string[];
+  };
 }
 
 // Export database types for Supabase
