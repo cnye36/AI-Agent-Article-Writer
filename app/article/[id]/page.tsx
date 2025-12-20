@@ -9,6 +9,7 @@ import { useArticleData } from "@/hooks/useArticleData";
 import { ArticleHeader } from "@/components/article/ArticleHeader";
 import { ArticleSettings } from "@/components/article/ArticleSettings";
 import { LoadingStates } from "@/components/article/LoadingStates";
+import { PublishModal } from "@/components/article/PublishModal";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserNav } from "@/components/user-nav";
@@ -38,6 +39,7 @@ export default function ArticlePage() {
   const [selectedImage, setSelectedImage] = useState<ArticleImage | null>(null);
   const [imageModel, setImageModel] = useState<"gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini">("gpt-image-1-mini");
   const [imageQuality, setImageQuality] = useState<"low" | "medium" | "high">("high");
+  const [showPublishModal, setShowPublishModal] = useState(false);
 
   // Wrapper to ensure state updates and log changes
   const handleImageModelChange = useCallback((model: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini") => {
@@ -137,10 +139,44 @@ export default function ArticlePage() {
     }
   }, [selectedImage]);
 
-  // Publish article
-  const handlePublish = useCallback(async () => {
-    await handleUpdateMetadata({ status: "published" });
-  }, [handleUpdateMetadata]);
+  // Show publish modal
+  const handlePublish = useCallback(() => {
+    setShowPublishModal(true);
+  }, []);
+
+  // Handle actual publishing to multiple sites
+  const handlePublishToSites = useCallback(
+    async (siteIds: string[], slugs: Record<string, string>) => {
+      if (!article) return;
+
+      // Publish to each selected site
+      const publishPromises = siteIds.map(async (siteId) => {
+        const res = await fetch("/api/articles/publications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            articleId: article.id,
+            siteId,
+            slug: slugs[siteId].trim(),
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Failed to publish to site ${siteId}`);
+        }
+
+        return res.json();
+      });
+
+      await Promise.all(publishPromises);
+
+      // Update article status to published if not already
+      if (article.status !== "published") {
+        await handleUpdateMetadata({ status: "published" });
+      }
+    },
+    [article, handleUpdateMetadata]
+  );
 
   // Delete article
   const handleDelete = useCallback(async () => {
@@ -387,9 +423,51 @@ export default function ArticlePage() {
   };
 
   const handleDeleteImage = async (imageId: string) => {
-    // Just UI removal for now, would need API endpoint for true delete
-    // But we can at least remove it from view
-    setImages((prev) => prev.filter((img) => img.id !== imageId));
+    if (!article) return;
+
+    const image = images.find((img) => img.id === imageId);
+    if (!image) return;
+
+    // Confirm deletion
+    if (!confirm("Are you sure you want to delete this image? This will remove it from the library and any instances in the article.")) {
+      return;
+    }
+
+    try {
+      // Delete from database
+      const response = await fetch(`/api/articles/images?id=${imageId}&articleId=${article.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete image");
+      }
+
+      // Remove from UI
+      setImages((prev) => prev.filter((img) => img.id !== imageId));
+
+      // If it was the cover image, clear it from article
+      if (article.cover_image === image.url) {
+        await handleUpdateMetadata({ cover_image: null });
+      }
+
+      // Refresh images list
+      const refreshResponse = await fetch(`/api/articles?id=${article.id}`);
+      if (refreshResponse.ok) {
+        const data = await refreshResponse.json();
+        if (data.images && Array.isArray(data.images)) {
+          const normalizedImages = normalizeImages(
+            data.images,
+            data.article?.cover_image
+          );
+          setImages(normalizedImages);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete image:", err);
+      alert("Failed to delete image. Please try again.");
+    }
   };
 
   const handleImageNavigate = (image: ArticleImage) => {
@@ -419,7 +497,7 @@ export default function ArticlePage() {
             <h1 className="text-xl font-bold">Content Studio</h1>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
               <nav className="flex gap-1 bg-slate-100 dark:bg-zinc-900 rounded-lg p-1 w-full sm:w-auto">
-                {["create", "topics", "library", "published"].map((tab) => (
+                {["overview", "create", "topics", "library", "published"].map((tab) => (
                   <button
                     key={tab}
                     onClick={() => router.push(`/dashboard?tab=${tab}`)}
@@ -464,6 +542,7 @@ export default function ArticlePage() {
               isGeneratingCoverImage={isGeneratingImage}
               images={images}
               onSetCoverImage={handleSetCoverImage}
+              onDeleteImage={handleDeleteImage}
               imageModel={imageModel}
               imageQuality={imageQuality}
               onImageModelChange={handleImageModelChange}
@@ -473,10 +552,11 @@ export default function ArticlePage() {
                 const response = await fetch(`/api/articles?id=${article.id}`);
                 if (response.ok) {
                   const data = await response.json();
-                  if (data.article?.images) {
+                  // Images are at top level of response, not nested in article
+                  if (data.images && Array.isArray(data.images)) {
                     // Normalize images to ensure only one cover image
                     const normalizedImages = normalizeImages(
-                      data.article.images,
+                      data.images,
                       data.article?.cover_image
                     );
                     setImages(normalizedImages);
@@ -488,9 +568,10 @@ export default function ArticlePage() {
                 const response = await fetch(`/api/articles?id=${article.id}`);
                 if (response.ok) {
                   const data = await response.json();
-                  if (data.article?.images) {
+                  // Images are at top level of response, not nested in article
+                  if (data.images && Array.isArray(data.images)) {
                     const normalizedImages = normalizeImages(
-                      data.article.images,
+                      data.images,
                       data.article?.cover_image
                     );
                     setImages(normalizedImages);
@@ -524,6 +605,16 @@ export default function ArticlePage() {
           )}
         </main>
       </div>
+
+      {/* Publish Modal */}
+      {article && (
+        <PublishModal
+          isOpen={showPublishModal}
+          onClose={() => setShowPublishModal(false)}
+          article={article}
+          onPublish={handlePublishToSites}
+        />
+      )}
     </>
   );
 }

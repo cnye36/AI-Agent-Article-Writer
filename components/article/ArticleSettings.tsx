@@ -4,7 +4,6 @@ import type { Article, ArticleImage, ArticleVersion, ArticleLink } from "@/types
 import { ArticleInfoSection } from "./ArticleInfoSection";
 import { ArticleAssetsSection } from "./ArticleAssetsSection";
 import { ArticleSEOSection } from "./ArticleSEOSection";
-import { ArticlePublishingSection } from "./ArticlePublishingSection";
 import { ArticleFrontmatterSection } from "./ArticleFrontmatterSection";
 import { ArticleLinksSection } from "./ArticleLinksSection";
 import { ArticleVersionHistory } from "./ArticleVersionHistory";
@@ -76,7 +75,6 @@ export function ArticleSettings({
           onImageQualityChange={onImageQualityChange}
         />
         <ArticleSEOSection article={article} onUpdate={onUpdate} />
-        <ArticlePublishingSection article={article} onUpdate={onUpdate} />
         <ArticleFrontmatterSection
           article={article}
           coverImage={images.find((img) => img.is_cover) || images[0] || null}

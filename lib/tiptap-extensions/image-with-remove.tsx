@@ -2,6 +2,15 @@ import Image from "@tiptap/extension-image";
 import { Node } from "@tiptap/core";
 
 export const ImageWithRemove = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      prompt: {
+        default: null,
+      },
+    };
+  },
+
   addNodeView() {
     return ({ node, getPos, editor }) => {
       const container = document.createElement("div");
@@ -90,6 +99,7 @@ export const ImageWithRemove = Image.extend({
         if (e.dataTransfer) {
           e.dataTransfer.setData("image/url", node.attrs.src);
           e.dataTransfer.setData("image/alt", node.attrs.alt || "");
+          e.dataTransfer.setData("image/prompt", node.attrs.prompt || "");
           e.dataTransfer.setData("image/from-canvas", "true");
           e.dataTransfer.effectAllowed = "move";
           // Store position for later removal

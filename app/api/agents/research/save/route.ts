@@ -68,8 +68,10 @@ export async function POST(request: NextRequest) {
         title: topicData.title || topic.title,
         summary: topicData.summary || topic.summary,
         industry_id: industryId,
+        user_id: user.id,
         sources: topicData.sources || topic.sources || [],
-        relevance_score: topicData.relevance_score || topic.relevance_score || 0,
+        relevance_score:
+          topicData.relevance_score || topic.relevance_score || 0,
         status: "pending" as const,
         embedding: topicData.embedding || topic.embedding,
         metadata: {

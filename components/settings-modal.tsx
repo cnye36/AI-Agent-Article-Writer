@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { useAuth } from "@/hooks/use-auth";
+import { PublishingSitesSection } from "@/components/settings/PublishingSitesSection";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -288,6 +289,9 @@ function SettingsSection({ user }: { user: SupabaseUser | null }) {
           </div>
         </div>
       </section>
+
+      {/* Publishing Sites Section */}
+      <PublishingSitesSection />
 
       {/* Security Section */}
       <section>

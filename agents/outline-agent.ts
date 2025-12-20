@@ -3,6 +3,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { StateGraph, Annotation } from "@langchain/langgraph";
 import { inspectUrl } from "@/lib/search/tavily";
 import type { ArticleType, Source } from "@/types";
+import type { ArticleOutline } from "@/lib/utils/outline-parser";
 
 interface TopicCandidate {
   title: string;
@@ -19,22 +20,6 @@ interface RelatedArticle {
   slug: string;
 }
 
-interface ArticleOutline {
-  title: string;
-  hook: string;
-  sections: {
-    heading: string;
-    keyPoints: string[];
-    wordTarget: number;
-    suggestedLinks: { articleId: string; anchorText: string }[];
-  }[];
-  conclusion: {
-    summary: string;
-    callToAction: string;
-  };
-  seoKeywords: string[];
-}
-
 const OutlineState = Annotation.Root({
   topic: Annotation<TopicCandidate>,
   articleType: Annotation<ArticleType>,
@@ -44,22 +29,6 @@ const OutlineState = Annotation.Root({
   freshSources: Annotation<Source[]>, // Fresh sources from web search
   outline: Annotation<ArticleOutline>,
 });
-
-interface ArticleOutline {
-  title: string;
-  hook: string;
-  sections: {
-    heading: string;
-    keyPoints: string[];
-    wordTarget: number;
-    suggestedLinks: { articleId: string; anchorText: string }[];
-  }[];
-  conclusion: {
-    summary: string;
-    callToAction: string;
-  };
-  seoKeywords: string[];
-}
 
 const outlineAgentPrompt = `You are an expert content strategist and outline architect.
   
@@ -249,6 +218,7 @@ Return a JSON object with this exact structure:
         typeof response.content === "string"
           ? response.content
           : JSON.stringify(response.content);
+      const { parseOutline } = await import("@/lib/utils/outline-parser");
       const outline = parseOutline(content);
       console.log(
         `[Outline Agent] Outline created with ${
@@ -268,32 +238,5 @@ Return a JSON object with this exact structure:
 // Note: findRelatedArticles is kept for potential future use
 // Currently, related articles are fetched in the API route and passed via state
 
-export function parseOutline(content: string): ArticleOutline {
-  // Parse AI response into outline structure
-  try {
-    // Strip markdown code blocks if present
-    const cleanContent = content.replace(/```json\n?|```/g, "").trim();
-    
-    const parsed = JSON.parse(cleanContent);
-    if (parsed.title && parsed.sections) return parsed;
-    
-    console.warn("[Outline Agent] Parsed JSON missing required fields:", parsed);
-    return {
-      title: parsed.title || "Untitled",
-      hook: parsed.hook || "",
-      sections: parsed.sections || [],
-      conclusion: parsed.conclusion || { summary: "", callToAction: "" },
-      seoKeywords: parsed.seoKeywords || [],
-    };
-  } catch (e) {
-    console.error("[Outline Agent] Failed to parse outline JSON:", e);
-    console.error("[Outline Agent] Raw content was:", content);
-    return {
-      title: "Untitled",
-      hook: "",
-      sections: [],
-      conclusion: { summary: "", callToAction: "" },
-      seoKeywords: [],
-    };
-  }
-}
+// Re-export parseOutline and ArticleOutline from utils for backward compatibility
+export { parseOutline, type ArticleOutline } from "@/lib/utils/outline-parser";

@@ -85,7 +85,7 @@ export function UserNav() {
         </button>
 
         {isOpen && (
-          <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-zinc-900 rounded-lg border border-slate-200 dark:border-zinc-800 shadow-lg z-50">
+          <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-zinc-900 rounded-lg border border-slate-200 dark:border-zinc-800 shadow-lg z-[60]">
             <div className="p-2">
               <div className="px-3 py-2 mb-2 border-b border-slate-200 dark:border-zinc-800">
                 <p className="text-xs text-slate-500 dark:text-zinc-400">

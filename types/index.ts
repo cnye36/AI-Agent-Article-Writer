@@ -313,7 +313,7 @@ export interface ArticleGenerationState {
   error: string | null;
 }
 
-export type GenerationStage = "config" | "topics" | "outline" | "content";
+export type GenerationStage = "config" | "topics" | "outline" | "content" | "linking";
 
 export interface GenerationConfig {
   industry: string;
@@ -549,4 +549,16 @@ export interface Database {
       };
     };
   };
+}
+
+// Intelligent Linking Types
+export interface LinkOpportunity {
+  id: string;
+  anchorText: string;
+  targetArticleId: string;
+  targetArticleTitle: string;
+  canonicalUrl: string;
+  relevanceScore: number;
+  reason: string;
+  status: "pending" | "accepted" | "rejected";
 }

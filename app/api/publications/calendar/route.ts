@@ -4,8 +4,8 @@ import { z } from "zod";
 
 // Request validation schema
 const CalendarQuerySchema = z.object({
-  startDate: z.string().datetime(),
-  endDate: z.string().datetime(),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
   siteIds: z.array(z.string().uuid()).optional(),
 });
 
@@ -24,29 +24,46 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get("startDate");
-    const endDate = searchParams.get("endDate");
+    // Support both 'start'/'end' and 'startDate'/'endDate' for backward compatibility
+    const startDateParam =
+      searchParams.get("startDate") || searchParams.get("start");
+    const endDateParam = searchParams.get("endDate") || searchParams.get("end");
     const siteIdsParam = searchParams.get("siteIds");
     const siteIds = siteIdsParam ? siteIdsParam.split(",") : undefined;
 
-    // Validate query parameters
-    const validationResult = CalendarQuerySchema.safeParse({
-      startDate,
-      endDate,
-      siteIds,
-    });
+    // Default to last 30 days to next 30 days if no dates provided
+    const defaultStartDate = new Date();
+    defaultStartDate.setDate(defaultStartDate.getDate() - 30);
+    const defaultEndDate = new Date();
+    defaultEndDate.setDate(defaultEndDate.getDate() + 30);
 
-    if (!validationResult.success) {
+    // Use provided dates or defaults
+    const startDate = startDateParam || defaultStartDate.toISOString();
+    const endDate = endDateParam || defaultEndDate.toISOString();
+
+    // Validate provided dates if they exist, or validate defaults
+    if (
+      startDateParam &&
+      !z.string().datetime().safeParse(startDateParam).success
+    ) {
       return NextResponse.json(
-        {
-          error: "Invalid query parameters",
-          details: validationResult.error.flatten(),
-        },
+        { error: "Invalid startDate parameter" },
+        { status: 400 }
+      );
+    }
+    if (
+      endDateParam &&
+      !z.string().datetime().safeParse(endDateParam).success
+    ) {
+      return NextResponse.json(
+        { error: "Invalid endDate parameter" },
         { status: 400 }
       );
     }
 
-    const { startDate: validStartDate, endDate: validEndDate, siteIds: validSiteIds } = validationResult.data;
+    const validStartDate = startDate;
+    const validEndDate = endDate;
+    const validSiteIds = siteIds;
 
     // Fetch publications from article_publications table (articles published to specific sites)
     let publicationsQuery = supabase
@@ -92,7 +109,10 @@ export async function GET(request: NextRequest) {
     if (!validSiteIds || validSiteIds.length === 0) {
       const { data: articles, error: articlesError } = await supabase
         .from("articles")
-        .select("id, title, slug, excerpt, article_type, cover_image, published_at")
+        .select(
+          "id, title, slug, excerpt, article_type, cover_image, published_at"
+        )
+        .eq("user_id", user.id)
         .eq("status", "published")
         .gte("published_at", validStartDate)
         .lte("published_at", validEndDate)
@@ -103,10 +123,12 @@ export async function GET(request: NextRequest) {
       }
 
       // Filter out articles that already have publications
-      const publishedArticleIds = new Set((publications || []).map((p: any) => p.article_id));
+      const publishedArticleIds = new Set(
+        (publications || []).map((p: any) => p.article_id)
+      );
       standAloneArticles = (articles || [])
-        .filter(a => a.published_at && !publishedArticleIds.has(a.id))
-        .map(a => ({
+        .filter((a) => a.published_at && !publishedArticleIds.has(a.id))
+        .map((a) => ({
           id: `standalone-${a.id}`,
           article_id: a.id,
           site_id: null,

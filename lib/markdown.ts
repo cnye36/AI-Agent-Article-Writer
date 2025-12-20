@@ -147,6 +147,11 @@ export function tiptapToMarkdown(
       case "hardBreak":
         return "\n";
 
+      case "image":
+        const src = node.attrs?.src || "";
+        const alt = node.attrs?.alt || "";
+        return `![${alt}](${src})\n\n`;
+
       default:
         return content;
     }
@@ -300,6 +305,20 @@ export function markdownToTiptap(markdown: string): JSONContent {
           ],
         });
       }
+      continue;
+    }
+
+    // Images - markdown format: ![alt](src)
+    const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (imageMatch) {
+      flushList();
+      content.push({
+        type: "image",
+        attrs: {
+          src: imageMatch[2],
+          alt: imageMatch[1] || "",
+        },
+      });
       continue;
     }
 

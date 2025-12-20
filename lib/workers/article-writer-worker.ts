@@ -38,7 +38,7 @@ export async function processArticleWritingJob(jobId: string): Promise<void> {
       message: "Fetching outline...",
     });
 
-    // Fetch the outline with topic data
+    // Fetch the outline with topic data (verify it belongs to the job's user)
     const { data: outlineData, error: outlineError } = await supabase
       .from("outlines")
       .select(
@@ -60,6 +60,7 @@ export async function processArticleWritingJob(jobId: string): Promise<void> {
       `
       )
       .eq("id", outlineId)
+      .eq("user_id", job.user_id)
       .single();
 
     if (outlineError || !outlineData) {
@@ -89,10 +90,11 @@ export async function processArticleWritingJob(jobId: string): Promise<void> {
       message: "Fetching related articles...",
     });
 
-    // Fetch related articles for internal linking
+    // Fetch related articles for internal linking (only user's articles)
     const { data: relatedArticles } = await supabase
       .from("articles")
       .select("id, title, slug, excerpt")
+      .eq("user_id", job.user_id)
       .eq("industry_id", industryId)
       .eq("status", "published")
       .limit(15);
@@ -193,6 +195,7 @@ export async function processArticleWritingJob(jobId: string): Promise<void> {
       .from("articles")
       .insert({
         outline_id: outlineId,
+        user_id: job.user_id,
         title: outline.structure.title,
         slug,
         content: result.fullArticle,
@@ -204,7 +207,7 @@ export async function processArticleWritingJob(jobId: string): Promise<void> {
         word_count: wordCount,
         reading_time: readingTime,
         seo_keywords: outline.structure.seoKeywords || [],
-      } as Article)
+      } as Article & { user_id: string })
       .select()
       .single();
 

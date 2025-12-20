@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     // Check for single article fetch
     const articleId = searchParams.get("id");
     if (articleId) {
-      return getSingleArticle(supabase, articleId);
+      return getSingleArticle(supabase, articleId, user.id);
     }
 
     // Parse search parameters
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
     const { query, industryId, articleType, status, sortBy, sortOrder, limit, offset } =
       validationResult.data;
 
-    // Build query
+    // Build query - filter by user_id to ensure users only see their own articles
     let dbQuery = supabase
       .from("articles")
       .select(
@@ -128,7 +128,8 @@ export async function GET(request: NextRequest) {
         )
       `,
         { count: "exact" }
-      );
+      )
+      .eq("user_id", user.id);
 
     // Apply filters
     if (query) {
@@ -237,6 +238,7 @@ export async function POST(request: NextRequest) {
         reading_time: readingTime,
         seo_keywords: seoKeywords || [],
         outline_id: outlineId,
+        user_id: user.id,
         published_at: status === "published" ? new Date().toISOString() : null,
       })
       .select(
@@ -313,11 +315,12 @@ export async function PUT(request: NextRequest) {
       changeSummary,
     } = validationResult.data;
 
-    // Fetch current article for comparison
+    // Fetch current article for comparison (verify it belongs to the user)
     const { data: currentArticle, error: fetchError } = await supabase
       .from("articles")
       .select("*")
       .eq("id", id)
+      .eq("user_id", user.id)
       .single();
 
     if (fetchError || !currentArticle) {
@@ -364,11 +367,12 @@ export async function PUT(request: NextRequest) {
       updateData.published_to = publishedTo;
     }
 
-    // Update article
+    // Update article (ensure it belongs to the user)
     const { data: updatedArticle, error: updateError } = await supabase
       .from("articles")
       .update(updateData)
       .eq("id", id)
+      .eq("user_id", user.id)
       .select(
         `
         *,
@@ -467,7 +471,7 @@ export async function DELETE(request: NextRequest) {
 }
 
 // Helper: Get single article with full details
-async function getSingleArticle(supabase: any, id: string) {
+async function getSingleArticle(supabase: any, id: string, userId: string) {
   const { data: article, error } = await supabase
     .from("articles")
     .select(
@@ -487,6 +491,7 @@ async function getSingleArticle(supabase: any, id: string) {
     `
     )
     .eq("id", id)
+    .eq("user_id", userId)
     .single();
 
   if (error) {

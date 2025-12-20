@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createOutlineAgent } from "@/agents/outline-agent";
+import { streamGenerateOutline } from "@/lib/ai/streaming-outline";
+import { inspectUrl } from "@/lib/search/tavily";
 import { z } from "zod";
 
 // Request validation schema
@@ -151,10 +153,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { topicId, articleType, targetLength, tone, customInstructions, wordCount } =
-      validationResult.data;
+    const {
+      topicId,
+      articleType,
+      targetLength,
+      tone,
+      customInstructions,
+      wordCount,
+    } = validationResult.data;
 
-    // Fetch the topic
+    // Fetch the topic (verify it belongs to the user)
     const { data: topicData, error: topicError } = await supabase
       .from("topics")
       .select(
@@ -168,6 +176,7 @@ export async function POST(request: NextRequest) {
       `
       )
       .eq("id", topicId)
+      .eq("user_id", user.id)
       .single();
 
     if (topicError || !topicData) {
@@ -176,21 +185,22 @@ export async function POST(request: NextRequest) {
 
     const topic = topicData as any;
 
-    // Fetch related articles for internal linking suggestions
+    // Fetch related articles for internal linking suggestions (only user's articles)
     const { data: relatedArticles } = await supabase
       .from("articles")
       .select("id, title, slug, excerpt, seo_keywords")
+      .eq("user_id", user.id)
       .eq("industry_id", topic.industry_id)
       .eq("status", "published")
       .limit(10);
 
     // Calculate section word targets
     const typeConfig = ARTICLE_TYPE_CONFIG[articleType];
-    
+
     // Use custom word count if provided, otherwise use optimal length config
     let lengthConfig: { min: number; target: number; max: number };
     let sectionCount: number;
-    
+
     if (wordCount) {
       // Use custom word count - calculate reasonable min/max (±20% range)
       const min = Math.round(wordCount * 0.8);
@@ -270,6 +280,7 @@ export async function POST(request: NextRequest) {
       .from("outlines")
       .insert({
         topic_id: topicId,
+        user_id: user.id,
         structure: enhancedOutline,
         article_type: articleType,
         target_length: targetLength,
@@ -340,7 +351,7 @@ export async function GET(request: NextRequest) {
     const topicId = searchParams.get("topicId");
 
     if (outlineId) {
-      // Fetch specific outline
+      // Fetch specific outline (verify it belongs to the user)
       const { data: outline, error } = await supabase
         .from("outlines")
         .select(
@@ -358,6 +369,7 @@ export async function GET(request: NextRequest) {
         `
         )
         .eq("id", outlineId)
+        .eq("user_id", user.id)
         .single();
 
       if (error) {
@@ -368,11 +380,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (topicId) {
-      // Fetch outlines for a topic
+      // Fetch outlines for a topic (verify they belong to the user)
       const { data: outlines, error } = await supabase
         .from("outlines")
         .select("*")
         .eq("topic_id", topicId)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -382,7 +395,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ outlines });
     }
 
-    // Fetch recent outlines
+    // Fetch recent outlines (only user's outlines)
     const { data: outlines, error } = await supabase
       .from("outlines")
       .select(
@@ -394,6 +407,7 @@ export async function GET(request: NextRequest) {
         )
       `
       )
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(20);
 
@@ -447,6 +461,7 @@ export async function PATCH(request: NextRequest) {
     const { data: updatedOutline, error } = await outlinesTable
       .update(updateData)
       .eq("id", outlineId)
+      .eq("user_id", user.id)
       .select()
       .single();
 
@@ -492,11 +507,12 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Check if outline exists
+    // Check if outline exists and belongs to user
     const { data: outline, error: fetchError } = await supabase
       .from("outlines")
       .select("id, structure")
       .eq("id", id)
+      .eq("user_id", user.id)
       .single();
 
     if (fetchError || !outline) {
@@ -601,10 +617,16 @@ export async function PUT(request: NextRequest) {
       });
     }
 
-    const { topicId, articleType, targetLength, tone, customInstructions, wordCount } =
-      validationResult.data;
+    const {
+      topicId,
+      articleType,
+      targetLength,
+      tone,
+      customInstructions,
+      wordCount,
+    } = validationResult.data;
 
-    // Fetch the topic
+    // Fetch the topic (verify it belongs to the user)
     const { data: topicData, error: topicError } = await supabase
       .from("topics")
       .select(
@@ -618,6 +640,7 @@ export async function PUT(request: NextRequest) {
       `
       )
       .eq("id", topicId)
+      .eq("user_id", user.id)
       .single();
 
     if (topicError || !topicData) {
@@ -652,11 +675,11 @@ export async function PUT(request: NextRequest) {
 
     // Calculate section word targets
     const typeConfig = ARTICLE_TYPE_CONFIG[articleType];
-    
+
     // Use custom word count if provided, otherwise use optimal length config
     let lengthConfig: { min: number; target: number; max: number };
     let sectionCount: number;
-    
+
     if (wordCount) {
       // Use custom word count - calculate reasonable min/max (±20% range)
       const min = Math.round(wordCount * 0.8);
@@ -698,6 +721,7 @@ export async function PUT(request: NextRequest) {
       .from("outlines")
       .insert({
         topic_id: topicId,
+        user_id: user.id,
         structure: placeholderOutline,
         article_type: articleType,
         target_length: targetLength,
@@ -756,39 +780,47 @@ export async function PUT(request: NextRequest) {
             )
           );
 
-          // Initialize outline agent
-          const outlineAgent = createOutlineAgent();
-
+          // Inspect sources for more detail (similar to outline agent's search node)
           const topicSummaryWithInstructions = customInstructions?.trim()
             ? `${
                 topic.summary || ""
               }\n\nUser instructions:\n${customInstructions}`.trim()
             : topic.summary || "";
 
-          // Generate outline using the agent (search happens inside)
-          const result = await outlineAgent.invoke({
-            topic: {
-              title: topic.title,
-              summary: topicSummaryWithInstructions,
-              sources: topic.sources || [], // Use existing sources immediately
-              angle: topic.metadata?.angle || "",
-              hook: topic.metadata?.hook || "", // Use hook from research if available
-              relevanceScore: 0.8,
-            },
-            articleType,
-            targetLength,
-            tone,
-            relatedArticles: (relatedArticles || []).map(
-              (a: { id: string; title: string; slug: string }) => ({
-                id: a.id,
-                title: a.title,
-                slug: a.slug,
-              })
-            ),
-            freshSources: [], // Will be populated by the search node
-          });
+          const sourcesToInspect = (topic.sources || []).slice(0, 6); // Cap at 6 sources
+          console.log(
+            `[Outline Agent] Inspecting ${sourcesToInspect.length} sources from research phase.`
+          );
 
-          // After search completes, update progress
+          // Parallel inspection of sources
+          const inspectionResults = await Promise.all(
+            sourcesToInspect.map(async (source: any) => {
+              try {
+                console.log(`[Outline Agent] Inspecting URL: ${source.url}`);
+                const result = await inspectUrl(source.url);
+                if (result) {
+                  console.log(
+                    `[Outline Agent] Successfully inspected: ${source.url}`
+                  );
+                  return result;
+                }
+                console.log(
+                  `[Outline Agent] Failed to inspect (empty result): ${source.url}`
+                );
+                return null;
+              } catch (e) {
+                console.error(
+                  `[Outline Agent] Error inspecting ${source.url}:`,
+                  e
+                );
+                return null;
+              }
+            })
+          );
+
+          const freshSources = inspectionResults.filter((s) => s !== null);
+
+          // After search completes, update progress and start streaming
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
@@ -800,7 +832,47 @@ export async function PUT(request: NextRequest) {
             )
           );
 
-          const parsedOutline = result.outline;
+          // Stream the outline generation
+          const outlineGenerator = streamGenerateOutline({
+            topic: {
+              title: topic.title,
+              summary: topicSummaryWithInstructions,
+              sources: topic.sources || [],
+              angle: topic.metadata?.angle || "",
+              hook: topic.metadata?.hook || "",
+            },
+            articleType,
+            targetLength,
+            tone,
+            freshSources,
+            relatedArticles: (relatedArticles || []).map(
+              (a: { id: string; title: string; slug: string }) => ({
+                id: a.id,
+                title: a.title,
+                slug: a.slug,
+              })
+            ),
+          });
+
+          // Stream tokens as they arrive and accumulate the full text
+          let fullOutlineText = "";
+
+          for await (const token of outlineGenerator) {
+            fullOutlineText += token;
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "token",
+                  content: token,
+                  stage: "outline",
+                })}\n\n`
+              )
+            );
+          }
+
+          // Parse the complete outline
+          const { parseOutline } = await import("@/lib/utils/outline-parser");
+          const parsedOutline = parseOutline(fullOutlineText);
 
           // Update progress
           controller.enqueue(
@@ -898,7 +970,7 @@ export async function PUT(request: NextRequest) {
           }
 
           // Final update with conclusion
-          await (supabase.from("outlines") as any)
+          await(supabase.from("outlines") as any)
             .update({ structure: enhancedOutline })
             .eq("id", outlineId);
 

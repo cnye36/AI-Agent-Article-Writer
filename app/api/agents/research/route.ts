@@ -233,6 +233,7 @@ export async function GET(request: NextRequest) {
         )
       `
       )
+      .eq("user_id", user.id)
       .eq("status", status)
       .order("relevance_score", { ascending: false })
       .limit(limit);
@@ -285,11 +286,12 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Check if topic exists
+    // Check if topic exists and belongs to user
     const { data: topic, error: fetchError } = await supabase
       .from("topics")
       .select("id, title")
       .eq("id", id)
+      .eq("user_id", user.id)
       .single();
 
     if (fetchError || !topic) {
@@ -306,7 +308,8 @@ export async function DELETE(request: NextRequest) {
     if (outlines && outlines.length > 0) {
       return NextResponse.json(
         {
-          error: "Cannot delete topic with associated outlines. Delete outlines first.",
+          error:
+            "Cannot delete topic with associated outlines. Delete outlines first.",
         },
         { status: 400 }
       );

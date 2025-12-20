@@ -9,6 +9,7 @@ import type {
   GenerationStage,
   GenerationConfig,
   OutlineStructure,
+  LinkOpportunity,
 } from "@/types";
 
 interface UseArticleGenerationReturn {
@@ -29,6 +30,8 @@ interface UseArticleGenerationReturn {
       similarity?: number;
     }>;
   } | null;
+  linkSuggestions: LinkOpportunity[];
+  targetSiteId: string | null;
 
   // Actions
   setConfig: (config: Partial<GenerationConfig>) => void;
@@ -36,13 +39,15 @@ interface UseArticleGenerationReturn {
   selectTopic: (topic: Topic) => Promise<void>;
   rejectTopic: (topicId: string) => Promise<void>;
   generateOutline: () => Promise<void>;
-  approveOutline: () => Promise<void>;
+  approveOutline: (targetSiteId?: string) => Promise<void>;
   editOutline: (structure: OutlineStructure) => void;
   generateArticle: () => Promise<void>;
   reset: () => void;
   goToStage: (stage: GenerationStage) => void;
   selectDifferentTopic: () => void;
   handleSaveSelected: (savedTopics: Topic[]) => void;
+  applyLinks: (selectedIds: string[]) => Promise<void>;
+  skipLinking: () => void;
 }
 
 const initialConfig: GenerationConfig = {
@@ -70,6 +75,8 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
       similarity?: number;
     }>;
   } | null>(null);
+  const [linkSuggestions, setLinkSuggestions] = useState<LinkOpportunity[]>([]);
+  const [targetSiteId, setTargetSiteId] = useState<string | null>(null);
 
   const supabase = getClient();
 
@@ -350,6 +357,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
       let buffer = "";
       let outlineId: string | null = null;
       let latestOutline: OutlineStructure | null = null;
+      let accumulatedOutlineText = "";
 
       if (!reader) {
         throw new Error("No response body");
@@ -370,10 +378,53 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
 
               if (data.type === "outline_created") {
                 outlineId = data.outlineId;
+              } else if (data.type === "token") {
+                // Accumulate tokens for streaming outline text
+                accumulatedOutlineText += data.content || "";
+                // Try to parse periodically (every 100 chars or so) to update UI
+                // But don't fail if JSON is incomplete
+                if (accumulatedOutlineText.length % 100 === 0) {
+                  try {
+                    const { parseOutline } = await import("@/lib/utils/outline-parser");
+                    const parsed = parseOutline(accumulatedOutlineText);
+                    if (parsed && parsed.title && parsed.sections) {
+                      latestOutline = parsed;
+                      // Update outline state with partial outline for real-time display
+                      if (outlineId) {
+                        setOutline({
+                          id: outlineId,
+                          structure: parsed,
+                          topic_id: selectedTopic.id,
+                          article_type: config.articleType,
+                          target_length: config.targetLength,
+                          tone: config.tone,
+                          approved: false,
+                          created_at: new Date().toISOString(),
+                        });
+                        setStage("outline");
+                      }
+                    }
+                  } catch (e) {
+                    // JSON incomplete, that's fine - will parse when complete
+                  }
+                }
               } else if (data.type === "progress") {
                 // Update progress - could show in UI if needed
                 if (data.outline) {
                   latestOutline = data.outline;
+                  if (outlineId) {
+                    setOutline({
+                      id: outlineId,
+                      structure: data.outline,
+                      topic_id: selectedTopic.id,
+                      article_type: config.articleType,
+                      target_length: config.targetLength,
+                      tone: config.tone,
+                      approved: false,
+                      created_at: new Date().toISOString(),
+                    });
+                    setStage("outline");
+                  }
                 }
               } else if (data.type === "complete") {
                 if (data.outline) {
@@ -386,6 +437,19 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
               console.error("Error parsing SSE data:", parseError);
             }
           }
+        }
+      }
+
+      // Parse final accumulated text if we have it
+      if (accumulatedOutlineText && !latestOutline) {
+        try {
+          const { parseOutline } = await import("@/lib/utils/outline-parser");
+          const parsed = parseOutline(accumulatedOutlineText);
+          if (parsed && parsed.title) {
+            latestOutline = parsed;
+          }
+        } catch (e) {
+          console.error("Error parsing final outline:", e);
         }
       }
 
@@ -426,7 +490,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
   }, [selectedTopic, config]);
 
   const approveOutline = useCallback(
-    async (useBackgroundJob: boolean = false) => {
+    async (siteId?: string) => {
       if (!outline) {
         setError("No outline to approve");
         return;
@@ -458,7 +522,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             outlineId: outline.id,
-            useBackgroundJob,
+            targetSiteId: siteId || undefined,
           }),
         });
 
@@ -468,12 +532,16 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
         }
 
         const data = await writeResponse.json();
+        setArticle(data.article);
 
-        if (useBackgroundJob) {
-          // Return job ID instead of article
-          return data.jobId;
+        // Check if link suggestions exist in article metadata
+        const metadata = data.article?.metadata as { linkSuggestions?: LinkOpportunity[]; targetSiteId?: string } | null;
+        if (metadata?.linkSuggestions && metadata.linkSuggestions.length > 0) {
+          setLinkSuggestions(metadata.linkSuggestions);
+          setTargetSiteId(metadata.targetSiteId || null);
+          setStage("linking"); // Show link review UI
         } else {
-          setArticle(data.article);
+          setStage("content"); // No suggestions - skip to editor
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
@@ -497,7 +565,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
   );
 
   const generateArticle = useCallback(
-    async (useBackgroundJob: boolean = false) => {
+    async () => {
       if (!outline) {
         setError("No outline available");
         return;
@@ -513,7 +581,6 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             outlineId: outline.id,
-            useBackgroundJob,
           }),
         });
 
@@ -523,13 +590,7 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
         }
 
         const data = await response.json();
-
-        if (useBackgroundJob) {
-          // Return job ID for polling
-          return data.jobId;
-        } else {
-          setArticle(data.article);
-        }
+        setArticle(data.article);
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
       } finally {
@@ -576,6 +637,51 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
     setError(null);
   }, []);
 
+  const applyLinks = useCallback(
+    async (selectedIds: string[]) => {
+      if (!article) {
+        setError("No article to apply links to");
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch("/api/articles/intelligent-links", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            articleId: article.id,
+            selectedLinkIds: selectedIds,
+          }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || "Failed to apply links");
+        }
+
+        const data = await response.json();
+        setArticle(data.article);
+        setLinkSuggestions([]);
+        setTargetSiteId(null);
+        setStage("content"); // Proceed to editor
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [article]
+  );
+
+  const skipLinking = useCallback(() => {
+    setLinkSuggestions([]);
+    setTargetSiteId(null);
+    setStage("content");
+  }, []);
+
   return {
     stage,
     config,
@@ -586,6 +692,8 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
     isLoading,
     error,
     researchMetadata,
+    linkSuggestions,
+    targetSiteId,
     setConfig,
     startResearch,
     selectTopic,
@@ -598,6 +706,8 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
     goToStage,
     selectDifferentTopic,
     handleSaveSelected,
+    applyLinks,
+    skipLinking,
   };
 }
 

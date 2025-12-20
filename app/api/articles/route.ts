@@ -70,10 +70,10 @@ export async function GET(request: NextRequest) {
     const articleId = searchParams.get("id");
     const slug = searchParams.get("slug");
     if (articleId) {
-      return getSingleArticle(supabase, articleId, "id");
+      return getSingleArticle(supabase, articleId, user.id, "id");
     }
     if (slug) {
-      return getSingleArticle(supabase, slug, "slug");
+      return getSingleArticle(supabase, slug, user.id, "slug");
     }
 
     // Parse search parameters
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
       offset,
     } = validationResult.data;
 
-    // Build query
+    // Build query - filter by user_id to ensure users only see their own articles
     let dbQuery = supabase.from("articles").select(
       `
         id,
@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
         )
       `,
       { count: "exact" }
-    );
+    ).eq("user_id", user.id);
 
     // Apply filters
     if (query) {
@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
     const contentHtml = convertMarkdownToHtml(content);
 
     // Create article
-    const insertData: Omit<Article, "id" | "created_at" | "updated_at"> = {
+    const insertData: Omit<Article, "id" | "created_at" | "updated_at"> & { user_id: string } = {
       title,
       slug,
       content,
@@ -251,6 +251,7 @@ export async function POST(request: NextRequest) {
       published_at: status === "published" ? new Date().toISOString() : null,
       published_to: [],
       cover_image: null,
+      user_id: user.id,
     };
 
     const { data: article, error: insertError } = await supabase
@@ -350,11 +351,12 @@ export async function PUT(request: NextRequest) {
       changeSummary,
     } = validationResult.data;
 
-    // Fetch current article for comparison
+    // Fetch current article for comparison (verify it belongs to the user)
     const { data: currentArticle, error: fetchError } = await supabase
       .from("articles")
       .select("*")
       .eq("id", id)
+      .eq("user_id", user.id)
       .single();
 
     if (fetchError || !currentArticle) {
@@ -420,11 +422,12 @@ export async function PUT(request: NextRequest) {
       updateData.published_to = publishedTo;
     }
 
-    // Update article
+    // Update article (ensure it belongs to the user)
     const { data: updatedArticle, error: updateError } = await supabase
       .from("articles")
       .update(updateData)
       .eq("id", id)
+      .eq("user_id", user.id)
       .select(
         `
         *,
@@ -494,11 +497,12 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Check if article exists
+    // Check if article exists and belongs to user
     const { data: article, error: fetchError } = await supabase
       .from("articles")
       .select("id, title")
       .eq("id", id)
+      .eq("user_id", user.id)
       .single();
 
     if (fetchError || !article) {
@@ -532,6 +536,7 @@ export async function DELETE(request: NextRequest) {
 async function getSingleArticle(
   supabase: Awaited<ReturnType<typeof createClient>>,
   identifier: string,
+  userId: string,
   type: "id" | "slug" = "id"
 ) {
   let query = supabase.from("articles").select(
@@ -550,7 +555,7 @@ async function getSingleArticle(
         target_length
       )
     `
-  );
+  ).eq("user_id", userId);
 
   if (type === "slug") {
     query = query.eq("slug", identifier);

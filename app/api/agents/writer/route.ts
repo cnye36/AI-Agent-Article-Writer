@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createWriterAgent } from "@/agents/writer-agent";
-import { JobQueue } from "@/lib/job-queue";
-import { processArticleWritingJob } from "@/lib/workers/article-writer-worker";
 import { generateEmbeddingForContent } from "@/lib/ai/article-embeddings";
+import { generateIntelligentLinks } from "@/lib/ai/intelligent-linking";
 import { z } from "zod";
-import type { Article, WriteArticleJobInput } from "@/types";
+import type { Article, LinkOpportunity } from "@/types";
 
 // Request validation schema
 const WriteRequestSchema = z.object({
   outlineId: z.string().uuid(),
   customInstructions: z.string().optional(),
   streamResponse: z.boolean().default(false),
-  useBackgroundJob: z.boolean().default(false), // New option for background processing
+  targetSiteId: z.string().uuid().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -40,33 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { outlineId, customInstructions, useBackgroundJob } =
-      validationResult.data;
-
-    // If useBackgroundJob is true, create a job and return immediately
-    if (useBackgroundJob) {
-      const jobInput: WriteArticleJobInput = {
-        outlineId,
-        customInstructions,
-      };
-
-      const job = await JobQueue.createJob("write_article", jobInput, user.id);
-
-      // Trigger job processing asynchronously (fire and forget)
-      // In production, this would be handled by a separate worker process
-      processArticleWritingJob(job.id).catch((error) => {
-        console.error("Background job processing failed:", error);
-      });
-
-      return NextResponse.json({
-        success: true,
-        jobId: job.id,
-        message:
-          "Article generation started. Use the job ID to check progress.",
-      });
-    }
-
-    // Continue with synchronous processing if useBackgroundJob is false
+    const { outlineId, customInstructions, targetSiteId } = validationResult.data;
     // Fetch the outline with topic data
     const { data: outlineData, error: outlineError } = await supabase
       .from("outlines")
@@ -220,6 +193,27 @@ export async function POST(request: NextRequest) {
 
     const result = await writerAgent.invoke(writerInput);
 
+    // NEW: Generate intelligent link suggestions if target site is specified
+    let linkSuggestions: LinkOpportunity[] = [];
+    if (targetSiteId) {
+      try {
+        console.log(`Generating intelligent links for site ${targetSiteId}...`);
+        const linkingResult = await generateIntelligentLinks(
+          result.fullArticle,
+          outline.structure.title,
+          outline.structure.excerpt || "",
+          targetSiteId,
+          industryId,
+          { minLinks: 3, maxLinks: 5, threshold: 0.7 }
+        );
+        linkSuggestions = linkingResult.suggestions;
+        console.log(`Generated ${linkSuggestions.length} link suggestions`);
+      } catch (linkError) {
+        console.error("Linking step failed (non-critical):", linkError);
+        // Continue without links - don't block article creation
+      }
+    }
+
     // Post-process: Ensure at least 2 external source links exist
     const processedResult = ensureExternalSourceLinks(
       { fullArticle: result.fullArticle },
@@ -255,6 +249,7 @@ export async function POST(request: NextRequest) {
         .from("articles")
         .insert({
           outline_id: outlineId,
+          user_id: user.id,
           title: outline.structure.title,
           slug,
           content: result.fullArticle,
@@ -267,6 +262,10 @@ export async function POST(request: NextRequest) {
           reading_time: readingTime,
           seo_keywords: outline.structure.seoKeywords || [],
           cover_image: (result as any).coverImage || null,
+          metadata: linkSuggestions.length > 0 ? {
+            linkSuggestions,
+            targetSiteId,
+          } : null,
         } as any)
         .select()
         .single();
@@ -279,6 +278,7 @@ export async function POST(request: NextRequest) {
           .from("articles")
           .insert({
             outline_id: outlineId,
+            user_id: user.id,
             title: outline.structure.title || "Untitled Article",
             slug: slug || `article-${Date.now()}`,
             content: result.fullArticle || "",
@@ -331,12 +331,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update topic status
+    // Update topic status (verify it belongs to the user)
     try {
       await supabase
         .from("topics")
         .update({ status: "used" } as unknown as never)
-        .eq("id", outline.topics.id);
+        .eq("id", outline.topics.id)
+        .eq("user_id", user.id);
     } catch (topicErr) {
       console.error("Error updating topic status:", topicErr);
       // Continue even if topic update fails
@@ -439,7 +440,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { outlineId } = body;
 
-    // Fetch outline with all necessary data
+    // Fetch outline with all necessary data (verify it belongs to the user)
     const { data: outlineData, error: outlineError } = await supabase
       .from("outlines")
       .select(
@@ -455,6 +456,7 @@ export async function PUT(request: NextRequest) {
       `
       )
       .eq("id", outlineId)
+      .eq("user_id", user.id)
       .single();
 
     if (outlineError || !outlineData) {
@@ -486,11 +488,12 @@ export async function PUT(request: NextRequest) {
     // Fetch related articles for internal linking (only published articles)
     const industryId = outline.topics?.industry_id;
 
-    // 1. Industry-based articles
+    // 1. Industry-based articles (only user's articles)
     const { data: industryArticles } = industryId
       ? await supabase
           .from("articles")
           .select("id, title, slug, excerpt")
+          .eq("user_id", user.id)
           .eq("industry_id", industryId)
           .eq("status", "published")
           .limit(10)
@@ -556,6 +559,7 @@ export async function PUT(request: NextRequest) {
         .from("articles")
         .insert({
           outline_id: outlineId,
+          user_id: user.id,
           title: outline.structure.title,
           slug,
           content: "", // Empty initially, will be updated as we stream
@@ -837,11 +841,12 @@ export async function PUT(request: NextRequest) {
               )
             );
           } else {
-            // Update topic status
+            // Update topic status (verify it belongs to the user)
             await supabase
               .from("topics")
               .update({ status: "used" } as unknown as never)
-              .eq("id", outline.topics.id);
+              .eq("id", outline.topics.id)
+              .eq("user_id", user.id);
           }
 
           // 5. Send completion

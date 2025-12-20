@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createEditorAgent } from "@/agents/editor-agent";
-import { JobQueue } from "@/lib/job-queue";
-import { processArticleEditingJob } from "@/lib/workers/article-editor-worker";
 import { streamEditArticle } from "@/lib/ai/streaming-editor";
 import { z } from "zod";
-import type { Article, EditArticleJobInput } from "@/types";
+import type { Article } from "@/types";
 
 // Helper functions
 function countWords(text: string): number {
@@ -29,7 +27,6 @@ async function convertToHtml(markdown: string): Promise<string> {
 const EditRequestSchema = z.object({
   articleId: z.string().uuid(),
   content: z.string().optional(), // If omitted, fetched from DB
-  useBackgroundJob: z.boolean().default(false),
 });
 
 export async function POST(request: NextRequest) {
@@ -57,27 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { articleId, content, useBackgroundJob } = validationResult.data;
-
-    // If useBackgroundJob is true, create a job and return immediately
-    if (useBackgroundJob) {
-      const job = await JobQueue.createJob<EditArticleJobInput>(
-        "edit_article",
-        { articleId, content },
-        user.id
-      );
-
-      // Process job in background (non-blocking)
-      processArticleEditingJob(job.id).catch((error) => {
-        console.error(`Error processing article editing job ${job.id}:`, error);
-      });
-
-      return NextResponse.json({
-        success: true,
-        jobId: job.id,
-        message: "Editor agent started in background",
-      });
-    }
+    const { articleId, content } = validationResult.data;
 
     // Fetch article if content not provided
     let articleContent = content;

@@ -43,6 +43,7 @@ export async function processArticleEditingJob(jobId: string): Promise<void> {
         .from("articles")
         .select("*")
         .eq("id", articleId)
+        .eq("user_id", job.user_id)
         .single();
 
       if (articleError || !articleData) {
@@ -52,11 +53,12 @@ export async function processArticleEditingJob(jobId: string): Promise<void> {
       article = articleData as Article;
       articleContent = article.content;
     } else {
-      // Fetch article metadata
+      // Fetch article metadata (verify it belongs to the job's user)
       const { data: articleData, error: articleError } = await supabase
         .from("articles")
         .select("*")
         .eq("id", articleId)
+        .eq("user_id", job.user_id)
         .single();
 
       if (articleError || !articleData) {

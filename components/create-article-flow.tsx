@@ -9,11 +9,12 @@ import { TopicsStage } from "./topics-stage";
 import { OutlineStage } from "./outline-stage";
 import { StreamingContentStage } from "./streaming-content-stage";
 import { LoadingDialog } from "./loading-dialog";
+import { LinkReviewStage } from "./link-review-stage";
 
-type Stage = "config" | "topics" | "outline" | "content";
+type Stage = "config" | "topics" | "outline" | "content" | "linking";
 
 function getStageIndex(stage: Stage): number {
-  const stages: Stage[] = ["config", "topics", "outline", "content"];
+  const stages: Stage[] = ["config", "topics", "outline", "content", "linking"];
   return stages.indexOf(stage);
 }
 
@@ -46,7 +47,37 @@ export function CreateArticleFlow({
     goToStage,
     error,
     handleSaveSelected,
+    linkSuggestions,
+    applyLinks,
+    skipLinking,
   } = useArticleGeneration();
+
+  // Publishing sites for link generation
+  const [publishingSites, setPublishingSites] = useState<Array<{
+    id: string;
+    name: string;
+    base_path: string;
+  }>>([]);
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+
+  // Fetch publishing sites on mount
+  useEffect(() => {
+    async function fetchSites() {
+      try {
+        const response = await fetch("/api/publishing-sites");
+        const data = await response.json();
+        if (data.success && data.data) {
+          setPublishingSites(data.data);
+          if (data.data.length > 0) {
+            setSelectedSiteId(data.data[0].id); // Default to first site
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching publishing sites:", error);
+      }
+    }
+    fetchSites();
+  }, []);
 
   // Streaming writer for real-time article generation
   const {
@@ -257,7 +288,7 @@ export function CreateArticleFlow({
               }
             } else {
               // Fall back to traditional non-streaming mode
-              approveOutline();
+              approveOutline(selectedSiteId || undefined);
             }
           }}
           onBack={() => {
@@ -286,6 +317,15 @@ export function CreateArticleFlow({
               goToStage("topics");
             }
           }}
+        />
+      )}
+
+      {stage === "linking" && article && (
+        <LinkReviewStage
+          suggestions={linkSuggestions}
+          originalContent={article.content}
+          onApply={applyLinks}
+          onSkip={skipLinking}
         />
       )}
 

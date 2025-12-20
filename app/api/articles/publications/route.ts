@@ -6,7 +6,7 @@ import { z } from "zod";
 const CreatePublicationSchema = z.object({
   articleId: z.string().uuid(),
   siteId: z.string().uuid(),
-  slug: z.string().min(1).max(200),
+  slug: z.string().max(200).optional(),
 });
 
 const UpdatePublicationSchema = z.object({
@@ -111,17 +111,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { articleId, siteId, slug } = validationResult.data;
+    const { articleId, siteId, slug: providedSlug } = validationResult.data;
 
-    // Verify article ownership
+    // Verify article ownership and get article slug
     const { data: article } = await supabase
       .from("articles")
-      .select("id")
+      .select("id, slug")
       .eq("id", articleId)
       .single();
 
     if (!article) {
       return NextResponse.json({ error: "Article not found" }, { status: 404 });
+    }
+
+    // Use provided slug or fall back to article slug
+    const slug = providedSlug?.trim() || article.slug;
+
+    if (!slug || slug.length === 0) {
+      return NextResponse.json(
+        { error: "Slug is required (either provided or from article)" },
+        { status: 400 }
+      );
     }
 
     // Verify site ownership
@@ -152,7 +162,7 @@ export async function POST(request: NextRequest) {
       const { data: publication, error: updateError } = await supabase
         .from("article_publications")
         .update({
-          slug,
+          slug: slug.trim(),
           published_at: new Date().toISOString(),
         } as any)
         .eq("id", existing.id)
@@ -189,7 +199,7 @@ export async function POST(request: NextRequest) {
       .insert({
         article_id: articleId,
         site_id: siteId,
-        slug,
+        slug: slug.trim(),
         published_at: new Date().toISOString(),
       } as any)
       .select(

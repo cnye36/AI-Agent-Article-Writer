@@ -36,6 +36,7 @@ interface CanvasEditorProps {
     is_cover?: boolean;
   }>;
   onSetCoverImage?: (imageId: string) => Promise<void>;
+  onDeleteImage?: (imageId: string) => Promise<void>;
   onImagesChange?: () => void;
   onGenerateCoverImageComplete?: () => void;
   imageModel?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
@@ -55,6 +56,7 @@ export function CanvasEditor({
   isGeneratingCoverImage = false,
   images = [],
   onSetCoverImage,
+  onDeleteImage,
   onImagesChange,
   onGenerateCoverImageComplete,
   imageModel = "gpt-image-1-mini",
@@ -91,6 +93,8 @@ export function CanvasEditor({
   const [previewImage, setPreviewImage] = useState<{
     src: string;
     alt: string;
+    prompt?: string;
+    pos?: number;
   } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -226,8 +230,17 @@ export function CanvasEditor({
         },
       },
       handleClick: (view, pos, event) => {
-        // Images in canvas are not clickable - they can only be moved or removed
-        // Clicking on images does nothing (no preview modal)
+        const node = view.state.doc.nodeAt(pos);
+        if (node && node.type.name === 'image') {
+          // Open preview modal on click
+          setPreviewImage({
+            src: node.attrs.src,
+             alt: node.attrs.alt,
+             prompt: node.attrs.prompt,
+             pos: pos
+          });
+          return true; // Stop default behavior
+        }
         return false;
       },
       handleDrop: (view, event, slice, moved) => {
@@ -371,6 +384,19 @@ export function CanvasEditor({
                 { type: "paragraph", content: [] }, // Empty paragraph after
               ])
               .run();
+            
+            // Immediately save content with the new image to ensure it persists
+            const markdownWithImage = tiptapToMarkdown(editor.getJSON());
+            if (markdownWithImage !== lastSavedContentRef.current) {
+              // Clear any pending debounced save
+              if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+              }
+              // Save immediately to ensure image is persisted
+              onSaveRef.current(markdownWithImage).catch(console.error);
+              lastSavedContentRef.current = markdownWithImage;
+            }
+            
             return true;
           }
         }
@@ -419,17 +445,28 @@ export function CanvasEditor({
   }, [editor]);
 
   // Update editor content when initialContent changes (e.g., during article generation)
+  // CRITICAL: Only update if content is significantly different AND longer to avoid overwriting user edits
+  // This prevents images and unsaved changes from being lost when switching tabs
   useEffect(() => {
     if (!editor || !initialContent) return;
 
-    const currentContent = tiptapToMarkdown(editor.getJSON());
-    // Only update if the new content is different and longer (to avoid overwriting with partial content)
-    // This allows the editor to update during streaming without overwriting user edits
-    if (
-      initialContent !== currentContent &&
-      initialContent.length > currentContent.length
-    ) {
-      editor.commands.setContent(markdownToTiptap(initialContent));
+    const currentMarkdown = tiptapToMarkdown(editor.getJSON());
+    const currentJson = editor.getJSON();
+    const newContent = markdownToTiptap(initialContent);
+    const newJson = JSON.stringify(newContent);
+    const currentJsonString = JSON.stringify(currentJson);
+    
+    // Only update if:
+    // 1. Content is actually different (JSON comparison)
+    // 2. New content is significantly longer (indicates new content, not just a refresh)
+    // 3. Current editor is empty or very short (initial load scenario)
+    const isSignificantlyDifferent = currentJsonString !== newJson;
+    const isNewContentLonger = initialContent.length > currentMarkdown.length + 100; // 100 char buffer
+    const isEditorEmpty = currentMarkdown.length < 50; // Empty or near-empty editor
+    
+    // Don't overwrite if editor has unsaved changes (images, edits) unless it's clearly new content
+    if (isSignificantlyDifferent && (isNewContentLonger || isEditorEmpty)) {
+      editor.commands.setContent(newContent);
       lastSavedContentRef.current = initialContent;
       if (showMarkdown) {
         setMarkdownContent(initialContent);
@@ -774,6 +811,8 @@ export function CanvasEditor({
       // Use separate loading state for image generation
       setIsGeneratingImage(true);
 
+
+
       try {
         // Extract model and quality from params if provided, otherwise use defaults
         // CRITICAL: Always check params.model first, never use requestBody.model as it might be stale
@@ -841,11 +880,25 @@ export function CanvasEditor({
                 attrs: {
                   src: src,
                   alt: data.prompt || "Generated Image",
+                  prompt: data.prompt,
                 },
               },
               { type: "paragraph", content: [] }, // Empty paragraph after
             ])
             .run();
+
+          // Immediately save content with the new image to ensure it persists
+          // This prevents images from being lost when switching tabs
+          const markdownWithImage = tiptapToMarkdown(editor.getJSON());
+          if (markdownWithImage !== lastSavedContentRef.current) {
+            // Clear any pending debounced save
+            if (saveTimeoutRef.current) {
+              clearTimeout(saveTimeoutRef.current);
+            }
+            // Save immediately to ensure image is persisted
+            onSaveRef.current(markdownWithImage).catch(console.error);
+            lastSavedContentRef.current = markdownWithImage;
+          }
 
           // Refresh images list if callback provided
           // Call onImagesChange regardless of data.record to ensure images refresh
@@ -861,8 +914,74 @@ export function CanvasEditor({
         setIsGeneratingImage(false);
       }
     },
-    [selectedText, editor, articleId, articleTitle, onImagesChange]
+
+    [selectedText, editor, articleId, articleTitle, onImagesChange, imageModel, imageQuality]
   );
+
+  
+  const handleEditPreviewImage = useCallback(async (editPrompt: string, originalPrompt: string, targetPos?: number) => {
+    if (!editor) return;
+    
+    console.log("[Canvas Editor] Editing preview image:", { originalPrompt, editPrompt, targetPos });
+    setIsGeneratingImage(true);
+    
+    try {
+        const response = await fetch("/api/ai/edit-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                prompt: editPrompt,
+                originalPrompt: originalPrompt || "A generic image",
+                model: imageModel,
+                quality: imageQuality
+            })
+        });
+
+        if (!response.ok) throw new Error("Failed to edit image");
+        
+        const data = await response.json();
+        
+        if (data.image) {
+           const imageSrc = data.image.startsWith('data:') 
+              ? data.image 
+              : `data:image/png;base64,${data.image}`;
+
+           // Determine node position
+           let pos = targetPos;
+           if (pos === undefined) {
+             const { from } = editor.state.selection;
+             pos = from;
+           }
+
+           // Verify node is an image
+           const node = editor.state.doc.nodeAt(pos);
+           if (!node || node.type.name !== "image") {
+               console.error("Target node is not an image at pos", pos);
+               // Fallback: try to find image by selection? Or just fail safely.
+               // If we are in preview mode, we really should rely on passed pos.
+           } else {
+               // Update image in editor
+               editor.chain().setNodeSelection(pos).updateAttributes("image", {
+                   src: imageSrc,
+                   prompt: data.prompt, 
+                   alt: data.prompt || node.attrs.alt 
+               }).run();
+               
+               // Update preview if open
+               setPreviewImage(prev => prev ? { ...prev, src: imageSrc, prompt: data.prompt, alt: data.prompt || prev.alt } : null);
+               
+               // Force save
+               const markdown = tiptapToMarkdown(editor.getJSON());
+               debouncedSave(markdown);
+           }
+        }
+    } catch (error) {
+        console.error("Failed to edit image:", error);
+        alert("Failed to edit image. Please try again.");
+    } finally {
+        setIsGeneratingImage(false);
+    }
+  }, [editor, imageModel, imageQuality, debouncedSave]);
 
   // Wrapper for cover image generation that switches to image tab
   const handleGenerateCoverImage = useCallback(async (params?: {
@@ -1095,9 +1214,8 @@ export function CanvasEditor({
 
           {/* Image Menu - Shows when image is selected */}
           {editor && (
-            <ImageBubbleMenu
-              editor={editor}
-              disabled={showMarkdown}
+            <ImageBubbleMenu 
+              editor={editor} 
             />
           )}
         </div>
@@ -1123,6 +1241,7 @@ export function CanvasEditor({
             isGeneratingCoverImage={isGeneratingCoverImage}
             images={images}
             onSetCoverImage={onSetCoverImage}
+            onDeleteImage={onDeleteImage}
             isGeneratingImage={isGeneratingImage}
             activeTab={aiAssistantTab}
             onTabChange={setAiAssistantTab}
@@ -1161,7 +1280,10 @@ export function CanvasEditor({
         <ImagePreviewModal
           src={previewImage.src}
           alt={previewImage.alt}
+          prompt={previewImage.prompt}
           onClose={() => setPreviewImage(null)}
+          onEdit={(prompt) => handleEditPreviewImage(prompt, previewImage.prompt || previewImage.alt, previewImage.pos)}
+          isEditing={isGeneratingImage}
         />
       )}
     </div>

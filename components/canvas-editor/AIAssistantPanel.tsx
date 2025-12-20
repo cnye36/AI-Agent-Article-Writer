@@ -30,6 +30,7 @@ interface AIAssistantPanelProps {
   isGeneratingCoverImage?: boolean;
   images?: ImageItem[];
   onSetCoverImage?: (imageId: string) => Promise<void>;
+  onDeleteImage?: (imageId: string) => Promise<void>;
   isGeneratingImage?: boolean;
   activeTab?: "text" | "image";
   onTabChange?: (tab: "text" | "image") => void;
@@ -55,6 +56,7 @@ export function AIAssistantPanel({
   isGeneratingCoverImage = false,
   images = [],
   onSetCoverImage,
+  onDeleteImage,
   isGeneratingImage = false,
   activeTab: controlledActiveTab,
   onTabChange,
@@ -499,6 +501,7 @@ export function AIAssistantPanel({
                 onSetCoverImage(imageId);
               }
             }}
+            onDeleteImage={onDeleteImage}
           />
         )}
       </div>
