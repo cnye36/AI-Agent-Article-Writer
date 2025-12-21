@@ -409,93 +409,6 @@ export interface DiffChange {
   content: string;
 }
 
-// Job Types
-export type JobType =
-  | "write_article"
-  | "generate_outline"
-  | "research_topics"
-  | "edit_article";
-export type JobStatus =
-  | "pending"
-  | "running"
-  | "completed"
-  | "failed"
-  | "cancelled";
-
-export interface Job<TInput = unknown, TOutput = unknown> {
-  id: string;
-  type: JobType;
-  status: JobStatus;
-  input: TInput;
-  output: TOutput | null;
-  error: JobError | null;
-  progress: JobProgress | null;
-  user_id: string;
-  started_at: string | null;
-  completed_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface JobError {
-  message: string;
-  code?: string;
-  details?: unknown;
-}
-
-export interface JobProgress {
-  current: number;
-  total: number;
-  message: string;
-  metadata?: {
-    sectionsCompleted?: number;
-    currentSection?: string;
-    wordCount?: number;
-  };
-}
-
-// Specific job input/output types
-export interface WriteArticleJobInput {
-  outlineId: string;
-  customInstructions?: string;
-}
-
-export interface WriteArticleJobOutput {
-  articleId: string;
-  article: Article;
-  metadata: {
-    wordCount: number;
-    readingTime: number;
-    sectionsWritten: number;
-  };
-}
-
-export interface GenerateOutlineJobInput {
-  topicId: string;
-  articleType: ArticleType;
-  targetLength: TargetLength;
-  tone?: string;
-  customInstructions?: string;
-}
-
-export interface GenerateOutlineJobOutput {
-  outlineId: string;
-  outline: Outline;
-}
-
-export interface EditArticleJobInput {
-  articleId: string;
-  content?: string; // If omitted, fetched from DB
-}
-
-export interface EditArticleJobOutput {
-  articleId: string;
-  article: Article;
-  metadata: {
-    wordCount: number;
-    changesMade: string[];
-  };
-}
 
 // Export database types for Supabase
 export interface Database {
@@ -530,17 +443,6 @@ export interface Database {
         Row: ArticleVersion;
         Insert: Omit<ArticleVersion, "id" | "created_at">;
         Update: Partial<Omit<ArticleVersion, "id">>;
-      };
-      jobs: {
-        Row: Job;
-        Insert: Omit<
-          Job,
-          "id" | "created_at" | "updated_at" | "started_at" | "completed_at"
-        > & {
-          started_at?: string;
-          completed_at?: string;
-        };
-        Update: Partial<Omit<Job, "id" | "created_at">>;
       };
       article_images: {
         Row: ArticleImage;

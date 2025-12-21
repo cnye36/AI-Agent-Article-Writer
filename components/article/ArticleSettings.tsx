@@ -27,6 +27,11 @@ interface ArticleSettingsProps {
   onImageClick: (image: ArticleImage) => void;
   onImageClose: () => void;
   onImageNavigate: (image: ArticleImage) => void;
+  onEditImage?: (
+    imageId: string,
+    newImageData: string,
+    newPrompt: string
+  ) => Promise<void>;
   onDelete: () => void;
   imageModel?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
   imageQuality?: "low" | "medium" | "high";
@@ -50,6 +55,7 @@ export function ArticleSettings({
   onImageClick,
   onImageClose,
   onImageNavigate,
+  onEditImage,
   onDelete,
   imageModel = "gpt-image-1-mini",
   imageQuality = "high",
@@ -93,6 +99,11 @@ export function ArticleSettings({
           onClose={onImageClose}
           onSetCoverImage={onSetCoverImage}
           onNavigate={onImageNavigate}
+          onEditImage={onEditImage}
+          articleId={article.id}
+          imageModel={imageModel}
+          imageQuality={imageQuality}
+          isGeneratingImage={isGeneratingImage}
         />
       )}
     </div>

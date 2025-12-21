@@ -474,6 +474,58 @@ export default function ArticlePage() {
     setSelectedImage(image);
   };
 
+  const handleEditImage = async (
+    imageId: string,
+    newImageData: string,
+    newPrompt: string
+  ) => {
+    try {
+      setIsGeneratingImage(true);
+      // Update image in database
+      const response = await fetch(`/api/articles/images`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageId,
+          articleId: article?.id,
+          imageData: newImageData,
+          prompt: newPrompt,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update image");
+      }
+
+      // Refresh images list
+      const refreshResponse = await fetch(`/api/articles?id=${article?.id}`);
+      if (refreshResponse.ok) {
+        const data = await refreshResponse.json();
+        if (data.images && Array.isArray(data.images)) {
+          const normalizedImages = normalizeImages(
+            data.images,
+            data.article?.cover_image
+          );
+          setImages(normalizedImages);
+          // Update selected image if it's the one being edited
+          const updatedImage = normalizedImages.find(
+            (img) => img.id === imageId
+          );
+          if (updatedImage) {
+            setSelectedImage(updatedImage);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to edit image:", err);
+      alert("Failed to edit image. Please try again.");
+      throw err;
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
   // Check loading states first
   const loadingState = (
     <LoadingStates
@@ -497,19 +549,21 @@ export default function ArticlePage() {
             <h1 className="text-xl font-bold">Content Studio</h1>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
               <nav className="flex gap-1 bg-slate-100 dark:bg-zinc-900 rounded-lg p-1 w-full sm:w-auto">
-                {["overview", "create", "topics", "library", "published"].map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => router.push(`/dashboard?tab=${tab}`)}
-                    className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
-                      false // Current tab is always false since we're not on dashboard
-                        ? "bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-sm"
-                        : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-800"
-                    }`}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </button>
-                ))}
+                {["overview", "create", "topics", "library", "published"].map(
+                  (tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => router.push(`/dashboard?tab=${tab}`)}
+                      className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                        false // Current tab is always false since we're not on dashboard
+                          ? "bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-sm"
+                          : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </button>
+                  )
+                )}
               </nav>
               <div className="flex items-center gap-2 sm:gap-3">
                 <ThemeToggle />
@@ -537,7 +591,7 @@ export default function ArticlePage() {
               articleType={article.article_type}
               articleTitle={article.title}
               onSave={handleSave}
-              onPublish={handlePublish}
+              onPublish={async () => {}}
               onGenerateCoverImage={handleGenerateCoverImage}
               isGeneratingCoverImage={isGeneratingImage}
               images={images}
@@ -549,7 +603,7 @@ export default function ArticlePage() {
               onImageQualityChange={setImageQuality}
               onImagesChange={async () => {
                 // Refresh images without full page reload
-                const response = await fetch(`/api/articles?id=${article.id}`);
+                const response = await fetch(`/api/articles?id=${article?.id}`);
                 if (response.ok) {
                   const data = await response.json();
                   // Images are at top level of response, not nested in article
@@ -596,6 +650,7 @@ export default function ArticlePage() {
               onImageClick={setSelectedImage}
               onImageClose={() => setSelectedImage(null)}
               onImageNavigate={handleImageNavigate}
+              onEditImage={handleEditImage}
               onDelete={handleDelete}
               imageModel={imageModel}
               imageQuality={imageQuality}

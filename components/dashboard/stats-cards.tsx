@@ -16,10 +16,6 @@ interface StatsCardsProps {
     approved: number;
     used: number;
   };
-  jobs: {
-    active: number;
-    pending: number;
-  };
 }
 
 interface StatCardProps {

@@ -3,9 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import {
   generateIntelligentLinks,
-  insertLinksIntoContent,
   type LinkOpportunity,
 } from "@/lib/ai/intelligent-linking";
+import { insertLinksIntoContent } from "@/lib/ai/intelligent-linking-utils";
 
 // Request validation schemas
 const GenerateSuggestionsSchema = z.object({
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Invalid request",
-          details: validation.error.errors,
+          details: validation.error.flatten().fieldErrors,
         },
         { status: 400 }
       );
@@ -128,7 +128,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Invalid request",
-          details: validation.error.errors,
+          details: validation.error.flatten().fieldErrors,
         },
         { status: 400 }
       );
@@ -151,7 +151,9 @@ export async function PUT(request: NextRequest) {
     }
 
     // Get link suggestions from article metadata
-    const linkSuggestions = (article.metadata as { linkSuggestions?: LinkOpportunity[] })?.linkSuggestions || [];
+    const linkSuggestions =
+      (article.metadata as { linkSuggestions?: LinkOpportunity[] })
+        ?.linkSuggestions || [];
 
     if (linkSuggestions.length === 0) {
       return NextResponse.json(
@@ -192,12 +194,18 @@ export async function PUT(request: NextRequest) {
     }
 
     // Save links to article_links table
-    const linksToSave = insertedLinks.map((link) => ({
-      source_article_id: articleId,
-      target_article_id: link.targetArticleId,
-      anchor_text: link.anchorText,
-      context: link.context,
-    }));
+    const linksToSave = insertedLinks.map(
+      (link: {
+        targetArticleId: string;
+        anchorText: string;
+        context: string;
+      }) => ({
+        source_article_id: articleId,
+        target_article_id: link.targetArticleId,
+        anchor_text: link.anchorText,
+        context: link.context,
+      })
+    );
 
     if (linksToSave.length > 0) {
       const { error: linksError } = await supabase

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { articleId, imageId, isCover } = await req.json();
+    const { articleId, imageId, isCover, imageData, prompt } = await req.json();
 
     if (!articleId || !imageId) {
       return NextResponse.json(
@@ -14,8 +14,44 @@ export async function PATCH(req: NextRequest) {
 
     const supabase = await createClient();
 
+    // If updating image data or prompt
+    if (imageData !== undefined || prompt !== undefined) {
+      const updateData: { url?: string; prompt?: string } = {};
+      if (imageData !== undefined) {
+        updateData.url = imageData;
+      }
+      if (prompt !== undefined) {
+        updateData.prompt = prompt;
+      }
+
+      const { data, error } = await supabase
+        .from("article_images")
+        .update(updateData)
+        .eq("id", imageId)
+        .eq("article_id", articleId)
+        .select()
+        .single();
+
+      if (error) {
+        return NextResponse.json(
+          { error: "Failed to update image" },
+          { status: 500 }
+        );
+      }
+
+      // If this is the cover image and we updated the URL, update the article's cover_image field
+      if (imageData && data.is_cover) {
+        await supabase
+          .from("articles")
+          .update({ cover_image: imageData })
+          .eq("id", articleId);
+      }
+
+      return NextResponse.json({ success: true, image: data });
+    }
+
     // If setting as cover, unset all other cover images for this article
-    if (isCover) {
+    if (isCover !== undefined) {
       // First, unset all cover images for this article
       await supabase
         .from("article_images")

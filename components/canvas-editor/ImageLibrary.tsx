@@ -91,10 +91,12 @@ export function ImageLibrary({
             }}
           >
             {img.url.startsWith("data:") ? (
-              <img
+              <Image
                 src={img.url}
                 alt={img.prompt || "Generated"}
-                className="w-full h-full object-cover pointer-events-none"
+                fill
+                className="object-cover pointer-events-none"
+                unoptimized
               />
             ) : (
               <Image
