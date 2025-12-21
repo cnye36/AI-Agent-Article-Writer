@@ -13,9 +13,9 @@ interface ArticleAssetsSectionProps {
   onSetCoverImage: (imageId: string) => void;
   onDeleteImage: (imageId: string) => void;
   onImageClick: (image: ArticleImage) => void;
-  imageModel?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+  imageModel?: "gpt-image-1.5" | "gpt-image-1-mini";
   imageQuality?: "low" | "medium" | "high";
-  onImageModelChange?: (model: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini") => void;
+  onImageModelChange?: (model: "gpt-image-1.5" | "gpt-image-1-mini") => void;
   onImageQualityChange?: (quality: "low" | "medium" | "high") => void;
 }
 
@@ -56,7 +56,7 @@ export function ArticleAssetsSection({
                 onChange={(e) => {
                   console.log("📸 [ArticleAssets] SELECT onChange FIRED!");
                   console.log("📸 [ArticleAssets] Event target value:", e.target.value);
-                  const newModel = e.target.value as "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+                  const newModel = e.target.value as "gpt-image-1.5" | "gpt-image-1-mini";
                   console.log("📸 [ArticleAssets] Model dropdown changed to:", newModel);
                   console.log("📸 [ArticleAssets] Current imageModel prop:", imageModel);
                   console.log("📸 [ArticleAssets] onImageModelChange type:", typeof onImageModelChange);
@@ -71,7 +71,6 @@ export function ArticleAssetsSection({
                 className="w-full bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white focus:border-blue-500/50 outline-none"
               >
                 <option value="gpt-image-1.5">GPT Image 1.5</option>
-                <option value="gpt-image-1">GPT Image 1</option>
                 <option value="gpt-image-1-mini">GPT Image 1 Mini</option>
               </select>
             </div>

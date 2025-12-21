@@ -24,7 +24,9 @@ export function Navbar() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-zinc-900 dark:text-white">AgentWriter</span>
+            <span className="text-xl font-bold text-zinc-900 dark:text-white">
+              Let AI Write It!
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -88,7 +90,9 @@ export function Navbar() {
             ))}
             <div className="pt-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">Theme</span>
+                <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                  Theme
+                </span>
                 <ThemeToggle />
               </div>
               <Link

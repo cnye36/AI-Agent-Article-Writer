@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   CreditCard,
   Globe,
+  Image as ImageIcon,
   Loader2,
   Settings,
   Shield,
@@ -127,11 +128,34 @@ function SettingsSection({ user }: { user: SupabaseUser | null }) {
   });
   const [language, setLanguage] = useState("en");
   const [timezone, setTimezone] = useState("UTC");
+  const [imageModel, setImageModel] = useState<"gpt-image-1.5" | "gpt-image-1-mini">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("imageModel");
+      if (saved === "gpt-image-1.5" || saved === "gpt-image-1-mini") {
+        return saved;
+      }
+    }
+    return "gpt-image-1-mini";
+  });
+  const [imageQuality, setImageQuality] = useState<"low" | "medium" | "high">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("imageQuality");
+      if (saved === "low" || saved === "medium" || saved === "high") {
+        return saved;
+      }
+    }
+    return "high";
+  });
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
     setIsSaving(true);
-    // TODO: Implement save functionality
+    // Save image settings to localStorage
+    if (typeof window !== "undefined") {
+      localStorage.setItem("imageModel", imageModel);
+      localStorage.setItem("imageQuality", imageQuality);
+    }
+    // TODO: Implement save functionality for other settings
     setTimeout(() => {
       setIsSaving(false);
     }, 1000);
@@ -286,6 +310,57 @@ function SettingsSection({ user }: { user: SupabaseUser | null }) {
               <option value="America/Denver">Mountain Time (MT)</option>
               <option value="America/Los_Angeles">Pacific Time (PT)</option>
             </select>
+          </div>
+        </div>
+      </section>
+
+      {/* Image Generation Settings Section */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <ImageIcon className="w-5 h-5 text-slate-600 dark:text-zinc-400" />
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+            Image Generation
+          </h3>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-zinc-300">
+              Model
+            </label>
+            <select
+              value={imageModel}
+              onChange={(e) => {
+                const newModel = e.target.value as "gpt-image-1.5" | "gpt-image-1-mini";
+                setImageModel(newModel);
+              }}
+              className="w-full px-4 py-2 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 dark:text-white"
+            >
+              <option value="gpt-image-1.5">GPT Image 1.5</option>
+              <option value="gpt-image-1-mini">GPT Image 1 Mini</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
+              Choose the AI model for generating images
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-zinc-300">
+              Quality
+            </label>
+            <select
+              value={imageQuality}
+              onChange={(e) => {
+                const newQuality = e.target.value as "low" | "medium" | "high";
+                setImageQuality(newQuality);
+              }}
+              className="w-full px-4 py-2 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 dark:text-white"
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
+              Higher quality takes longer but produces better results
+            </p>
           </div>
         </div>
       </section>

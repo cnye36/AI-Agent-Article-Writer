@@ -1,8 +1,8 @@
-# Content Studio
+# Let AI Write It!
 
 A powerful AI-powered content creation platform that helps you research, outline, write, and publish high-quality articles across multiple platforms. Built with a multi-agent AI architecture for maximum quality and efficiency.
 
-![Content Studio](https://via.placeholder.com/1200x600/1a1a2e/ffffff?text=Content+Studio)
+![Let AI Write It!](https://letaiwriteit.com/images/logo.png)
 
 ## ✨ Features
 

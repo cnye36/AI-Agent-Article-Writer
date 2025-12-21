@@ -1,10 +1,10 @@
-# Content Studio - Technical Specification & Developer Guide
+# Let AI Write It! - Technical Specification & Developer Guide
 
 > **Version:** 1.0.0  
 > **Last Updated:** December 2024  
 > **Stack:** Next.js 14, TypeScript, Supabase, Anthropic Claude, LangGraph, TipTap
 
-This document provides comprehensive technical documentation for developers and AI assistants working on the Content Studio codebase.
+This document provides comprehensive technical documentation for developers and AI assistants working on the Let AI Write It! codebase.
 
 ---
 

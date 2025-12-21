@@ -25,7 +25,7 @@ interface CanvasEditorProps {
   onSave: (content: string) => Promise<void>;
   onPublish?: () => Promise<void>;
   onGenerateCoverImage?: (params?: {
-    model?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+    model?: "gpt-image-1.5" | "gpt-image-1-mini";
     quality?: "low" | "medium" | "high";
   }) => Promise<void>;
   isGeneratingCoverImage?: boolean;
@@ -39,9 +39,9 @@ interface CanvasEditorProps {
   onDeleteImage?: (imageId: string) => Promise<void>;
   onImagesChange?: () => void;
   onGenerateCoverImageComplete?: () => void;
-  imageModel?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+  imageModel?: "gpt-image-1.5" | "gpt-image-1-mini";
   imageQuality?: "low" | "medium" | "high";
-  onImageModelChange?: (model: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini") => void;
+  onImageModelChange?: (model: "gpt-image-1.5" | "gpt-image-1-mini") => void;
   onImageQualityChange?: (quality: "low" | "medium" | "high") => void;
 }
 
@@ -102,6 +102,9 @@ export function CanvasEditor({
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedContentRef = useRef<string>(initialContent);
   const onSaveRef = useRef(onSave);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const autoScrollIntervalRef = useRef<number | null>(null);
+  const lastCoverImageUrlRef = useRef<string | null>(null);
 
   // Keep onSave ref updated
   useEffect(() => {
@@ -409,6 +412,103 @@ export function CanvasEditor({
     },
   });
 
+  // Auto-scroll when dragging near viewport edges
+  useEffect(() => {
+    if (!scrollContainerRef.current) return;
+
+    const scrollContainer = scrollContainerRef.current;
+    const SCROLL_THRESHOLD = 100; // pixels from edge
+    const SCROLL_SPEED = 10; // pixels per frame
+    let isDragging = false;
+
+    const handleDragOver = (e: DragEvent) => {
+      // Check if dragging an image
+      const dataTransfer = e.dataTransfer;
+      if (!dataTransfer) return;
+
+      const hasImage = 
+        dataTransfer.types.includes("image/url") ||
+        dataTransfer.types.includes("text/html") ||
+        dataTransfer.getData("image/from-canvas") === "true";
+
+      if (!hasImage) return;
+
+      isDragging = true;
+      const rect = scrollContainer.getBoundingClientRect();
+      const mouseY = e.clientY;
+      const containerTop = rect.top;
+      const containerBottom = rect.bottom;
+      const scrollTop = scrollContainer.scrollTop;
+      const scrollHeight = scrollContainer.scrollHeight;
+      const clientHeight = scrollContainer.clientHeight;
+
+      // Clear any existing scroll interval
+      if (autoScrollIntervalRef.current) {
+        cancelAnimationFrame(autoScrollIntervalRef.current);
+      }
+
+      // Check if near top edge
+      const distanceFromTop = mouseY - containerTop;
+      if (distanceFromTop < SCROLL_THRESHOLD && scrollTop > 0) {
+        const scrollAmount = Math.max(1, (SCROLL_THRESHOLD - distanceFromTop) / SCROLL_THRESHOLD * SCROLL_SPEED);
+        const scroll = () => {
+          if (scrollContainer.scrollTop > 0) {
+            scrollContainer.scrollTop = Math.max(0, scrollContainer.scrollTop - scrollAmount);
+            autoScrollIntervalRef.current = requestAnimationFrame(scroll);
+          } else {
+            autoScrollIntervalRef.current = null;
+          }
+        };
+        autoScrollIntervalRef.current = requestAnimationFrame(scroll);
+      }
+      // Check if near bottom edge
+      else if (containerBottom - mouseY < SCROLL_THRESHOLD && scrollTop < scrollHeight - clientHeight) {
+        const distanceFromBottom = containerBottom - mouseY;
+        const scrollAmount = Math.max(1, (SCROLL_THRESHOLD - distanceFromBottom) / SCROLL_THRESHOLD * SCROLL_SPEED);
+        const scroll = () => {
+          if (scrollContainer.scrollTop < scrollHeight - clientHeight) {
+            scrollContainer.scrollTop = Math.min(scrollHeight - clientHeight, scrollContainer.scrollTop + scrollAmount);
+            autoScrollIntervalRef.current = requestAnimationFrame(scroll);
+          } else {
+            autoScrollIntervalRef.current = null;
+          }
+        };
+        autoScrollIntervalRef.current = requestAnimationFrame(scroll);
+      }
+    };
+
+    const handleDragEnd = () => {
+      isDragging = false;
+      if (autoScrollIntervalRef.current) {
+        cancelAnimationFrame(autoScrollIntervalRef.current);
+        autoScrollIntervalRef.current = null;
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      // Only stop scrolling if we've actually left the container
+      if (!scrollContainer.contains(e.relatedTarget as Node)) {
+        if (autoScrollIntervalRef.current) {
+          cancelAnimationFrame(autoScrollIntervalRef.current);
+          autoScrollIntervalRef.current = null;
+        }
+      }
+    };
+
+    scrollContainer.addEventListener("dragover", handleDragOver);
+    document.addEventListener("dragend", handleDragEnd);
+    scrollContainer.addEventListener("dragleave", handleDragLeave);
+
+    return () => {
+      scrollContainer.removeEventListener("dragover", handleDragOver);
+      document.removeEventListener("dragend", handleDragEnd);
+      scrollContainer.removeEventListener("dragleave", handleDragLeave);
+      if (autoScrollIntervalRef.current) {
+        cancelAnimationFrame(autoScrollIntervalRef.current);
+      }
+    };
+  }, []);
+
   // Handle drag from canvas to sidebar - remove image from canvas when dropped on sidebar
   useEffect(() => {
     if (!editor) return;
@@ -522,6 +622,78 @@ export function CanvasEditor({
     }
     prevShowMarkdownRef.current = showMarkdown;
   }, [showMarkdown, editor, markdownContent]);
+
+  // Insert cover image at the top of the article when it's generated
+  useEffect(() => {
+    if (!editor || images.length === 0) return;
+
+    // Find the cover image
+    const coverImage = images.find((img) => img.is_cover);
+    if (!coverImage || !coverImage.url) {
+      // Reset ref if no cover image
+      lastCoverImageUrlRef.current = null;
+      return;
+    }
+
+    // Skip if we've already processed this cover image
+    if (lastCoverImageUrlRef.current === coverImage.url) return;
+
+    // Check if the cover image is already at the beginning of the content
+    const doc = editor.state.doc;
+    let coverImageExistsAtTop = false;
+    let coverImagePosition: number | null = null;
+
+    // Search through the document to find if cover image exists
+    doc.descendants((node, pos) => {
+      if (node.type.name === "image" && node.attrs?.src === coverImage.url) {
+        coverImagePosition = pos;
+        // Check if it's in the first 200 characters (roughly top of document)
+        if (pos < 200) {
+          coverImageExistsAtTop = true;
+        }
+        return false; // Stop searching
+      }
+    });
+
+    // If cover image is not at the top, insert it
+    if (!coverImageExistsAtTop) {
+      console.log("🖼️ [CanvasEditor] Inserting cover image at top of article:", coverImage.url);
+      
+      // Insert at position 0 (beginning of document)
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(0, [
+          {
+            type: "image",
+            attrs: {
+              src: coverImage.url,
+              alt: coverImage.prompt || "Cover Image",
+              prompt: coverImage.prompt || null,
+            },
+          },
+          { type: "paragraph", content: [] }, // Empty paragraph after for spacing
+        ])
+        .run();
+
+      // Save the content with the cover image
+      const markdownWithCoverImage = tiptapToMarkdown(editor.getJSON());
+      if (markdownWithCoverImage !== lastSavedContentRef.current) {
+        // Clear any pending debounced save
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+        // Save immediately to ensure cover image is persisted
+        onSaveRef.current(markdownWithCoverImage).catch(console.error);
+        lastSavedContentRef.current = markdownWithCoverImage;
+      }
+    } else {
+      console.log("🖼️ [CanvasEditor] Cover image already exists at top of article");
+    }
+
+    // Update the ref to track this cover image
+    lastCoverImageUrlRef.current = coverImage.url;
+  }, [editor, images]);
 
   // Handle markdown content changes
   const handleMarkdownChange = useCallback(
@@ -793,7 +965,7 @@ export function CanvasEditor({
     async (params?: {
       prompt?: string;
       sectionContent?: string;
-      model?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+      model?: "gpt-image-1.5" | "gpt-image-1-mini";
       quality?: "low" | "medium" | "high";
     }) => {
       console.log("🚀 handleGenerateImage CALLED with params:", params);
@@ -1071,10 +1243,98 @@ export function CanvasEditor({
     [articleId, onImagesChange]
   );
 
+  // Handler for uploading images
+  const handleUploadImage = useCallback(
+    async (file: File, isCover: boolean = false) => {
+      if (!articleId) {
+        alert("Article ID is required to upload images");
+        return;
+      }
+
+      setIsGeneratingImage(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("articleId", articleId);
+        formData.append("isCover", isCover.toString());
+
+        const response = await fetch("/api/articles/images", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to upload image");
+        }
+
+        const data = await response.json();
+
+        // If image was uploaded successfully and we want to insert it into the editor
+        if (data.image && editor && !isCover) {
+          const { to } = editor.state.selection;
+          const $pos = editor.state.doc.resolve(to);
+
+          let insertPos = to;
+          if (
+            $pos.parent.type.name === "paragraph" &&
+            $pos.parent.textContent
+          ) {
+            insertPos = $pos.after();
+          }
+
+          // Insert image with proper spacing
+          editor
+            .chain()
+            .focus()
+            .insertContentAt(insertPos, [
+              { type: "paragraph", content: [] },
+              {
+                type: "image",
+                attrs: {
+                  src: data.image.url,
+                  alt: data.image.prompt || "Uploaded Image",
+                  prompt: data.image.prompt,
+                },
+              },
+              { type: "paragraph", content: [] },
+            ])
+            .run();
+
+          // Save immediately
+          const markdownWithImage = tiptapToMarkdown(editor.getJSON());
+          if (markdownWithImage !== lastSavedContentRef.current) {
+            if (saveTimeoutRef.current) {
+              clearTimeout(saveTimeoutRef.current);
+            }
+            onSaveRef.current(markdownWithImage).catch(console.error);
+            lastSavedContentRef.current = markdownWithImage;
+          }
+        }
+
+        // Refresh images list
+        if (onImagesChange) {
+          onImagesChange();
+        }
+      } catch (error) {
+        console.error("Failed to upload image:", error);
+        alert(
+          error instanceof Error
+            ? error.message
+            : "Failed to upload image. Please try again."
+        );
+        throw error;
+      } finally {
+        setIsGeneratingImage(false);
+      }
+    },
+    [articleId, editor, onImagesChange, tiptapToMarkdown]
+  );
+
   // Wrapper for cover image generation that switches to image tab
   const handleGenerateCoverImage = useCallback(
     async (params?: {
-      model?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+      model?: "gpt-image-1.5" | "gpt-image-1-mini";
       quality?: "low" | "medium" | "high";
     }) => {
       // Switch to image tab when generating cover
@@ -1209,7 +1469,7 @@ export function CanvasEditor({
           aiPanelOpen ? "lg:pr-96" : ""
         }`}
       >
-        <div className="h-full overflow-y-auto scrollbar-thin">
+        <div ref={scrollContainerRef} className="h-full overflow-y-auto scrollbar-thin">
           {/* Formatting Toolbar - Sticky Header */}
           {editor && (
             <FormattingToolbar
@@ -1353,6 +1613,7 @@ export function CanvasEditor({
             onImageModelChange={onImageModelChange}
             onImageQualityChange={onImageQualityChange}
             onEditImage={handleEditLibraryImage}
+            onUploadImage={handleUploadImage}
           />
         </div>
       </div>

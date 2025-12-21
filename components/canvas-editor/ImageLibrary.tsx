@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { downloadImage, generateFilename } from "@/lib/image-utils";
@@ -16,6 +17,8 @@ interface ImageLibraryProps {
   onImageClick: (image: ImageItem) => void;
   onSetCoverImage: (imageId: string) => void;
   onDeleteImage?: (imageId: string) => void;
+  onUploadImage?: (file: File, isCover?: boolean) => Promise<void>;
+  articleId?: string;
 }
 
 export function ImageLibrary({
@@ -23,31 +26,126 @@ export function ImageLibrary({
   onImageClick,
   onSetCoverImage,
   onDeleteImage,
+  onUploadImage,
+  articleId,
 }: ImageLibraryProps) {
-  if (images.length === 0) return null;
+  const [isUploading, setIsUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (!onUploadImage || !articleId) return;
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      setIsUploading(true);
+      try {
+        await onUploadImage(file, false);
+      } catch (error) {
+        console.error("Failed to upload image:", error);
+        alert("Failed to upload image. Please try again.");
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
+
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onUploadImage && articleId) {
+      setIsUploading(true);
+      try {
+        await onUploadImage(file, false);
+        e.target.value = ""; // Reset input
+      } catch (error) {
+        console.error("Failed to upload image:", error);
+        alert("Failed to upload image. Please try again.");
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
 
   return (
     <div className="mt-6 pt-6 border-t border-slate-200 dark:border-zinc-800 image-library-container">
-      <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-3">
-        Image Library
-      </h4>
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-medium text-slate-900 dark:text-white">
+          Image Library
+        </h4>
+        {onUploadImage && articleId && (
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+              className="hidden"
+              onChange={handleFileInput}
+              disabled={isUploading}
+            />
+            <span className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium flex items-center gap-1">
+              {isUploading ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-3 h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  Upload
+                </>
+              )}
+            </span>
+          </label>
+        )}
+      </div>
       <p className="text-xs text-slate-600 dark:text-zinc-500 mb-3">
         Click to view • Hover for actions • Drag to insert • Right-click to set
         as cover
+        {onUploadImage && articleId && " • Drop images here to upload"}
       </p>
       <div
-        className="grid grid-cols-2 gap-2 image-library"
+        className={cn(
+          "grid grid-cols-2 gap-2 image-library rounded-lg transition-colors",
+          dragActive &&
+            "bg-blue-50 dark:bg-blue-950/20 border-2 border-blue-400 border-dashed"
+        )}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
         onDragOver={(e) => {
           e.preventDefault();
+          e.stopPropagation();
           const fromCanvas = e.dataTransfer.getData("image/from-canvas");
           if (fromCanvas === "true") {
             e.dataTransfer.dropEffect = "move";
+          } else if (onUploadImage && articleId) {
+            e.dataTransfer.dropEffect = "copy";
           }
         }}
-        onDrop={(e) => {
-          e.preventDefault();
-          // Drop handling is done in the canvas editor's global drop handler
-        }}
+        onDrop={handleDrop}
       >
         {images.map((img) => (
           <div

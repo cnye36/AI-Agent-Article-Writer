@@ -37,12 +37,32 @@ export default function ArticlePage() {
   const [activeTab, setActiveTab] = useState<"edit" | "settings">("edit");
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [selectedImage, setSelectedImage] = useState<ArticleImage | null>(null);
-  const [imageModel, setImageModel] = useState<"gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini">("gpt-image-1-mini");
-  const [imageQuality, setImageQuality] = useState<"low" | "medium" | "high">("high");
+  const [imageModel, setImageModel] = useState<"gpt-image-1.5" | "gpt-image-1-mini">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("imageModel");
+      if (saved === "gpt-image-1.5" || saved === "gpt-image-1-mini") {
+        return saved;
+      }
+    }
+    return "gpt-image-1-mini";
+  });
+  const [imageQuality, setImageQuality] = useState<"low" | "medium" | "high">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("imageQuality");
+      if (saved === "low" || saved === "medium" || saved === "high") {
+        return saved;
+      }
+    }
+    return "high";
+  });
   const [showPublishModal, setShowPublishModal] = useState(false);
 
   // Wrapper to ensure state updates and log changes
-  const handleImageModelChange = useCallback((model: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini") => {
+  const handleImageModelChange = useCallback((model: "gpt-image-1.5" | "gpt-image-1-mini") => {
+    // Also save to localStorage when changed
+    if (typeof window !== "undefined") {
+      localStorage.setItem("imageModel", model);
+    }
     console.log("🔄 [ArticlePage] handleImageModelChange called with:", model);
     console.log("🔄 [ArticlePage] Current imageModel before update:", imageModel);
     setImageModel(model);
@@ -305,7 +325,7 @@ export default function ArticlePage() {
   );
 
   const handleGenerateCoverImage = async (params?: {
-    model?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+    model?: "gpt-image-1.5" | "gpt-image-1-mini";
     quality?: "low" | "medium" | "high";
   }) => {
     if (!article) return;
@@ -546,7 +566,7 @@ export default function ArticlePage() {
         {/* Main Dashboard Header */}
         <header className="border-b border-slate-200 dark:border-zinc-800 px-4 sm:px-6 py-4 bg-white dark:bg-zinc-950">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <h1 className="text-xl font-bold">Content Studio</h1>
+            <h1 className="text-xl font-bold">Let AI Write It!</h1>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
               <nav className="flex gap-1 bg-slate-100 dark:bg-zinc-900 rounded-lg p-1 w-full sm:w-auto">
                 {["overview", "create", "topics", "library", "published"].map(

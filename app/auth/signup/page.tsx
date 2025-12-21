@@ -58,7 +58,9 @@ export default function SignUpPage() {
       <div className="w-full max-w-md">
         <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8">
           <h1 className="text-2xl font-bold mb-2">Sign Up</h1>
-          <p className="text-zinc-400 mb-6">Create your Content Studio account</p>
+          <p className="text-zinc-400 mb-6">
+            Create your Let AI Write It! account
+          </p>
 
           {error && (
             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
@@ -83,7 +85,10 @@ export default function SignUpPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium mb-2"
+              >
                 Password
               </label>
               <input
@@ -96,11 +101,16 @@ export default function SignUpPage() {
                 className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="••••••••"
               />
-              <p className="mt-1 text-xs text-zinc-500">Must be at least 8 characters</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Must be at least 8 characters
+              </p>
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium mb-2">
+              <label
+                htmlFor="confirmPassword"
+                className="block text-sm font-medium mb-2"
+              >
                 Confirm Password
               </label>
               <input
@@ -125,7 +135,10 @@ export default function SignUpPage() {
 
           <p className="mt-6 text-center text-sm text-zinc-400">
             Already have an account?{" "}
-            <Link href="/auth/signin" className="text-blue-500 hover:text-blue-400">
+            <Link
+              href="/auth/signin"
+              className="text-blue-500 hover:text-blue-400"
+            >
               Sign in
             </Link>
           </p>

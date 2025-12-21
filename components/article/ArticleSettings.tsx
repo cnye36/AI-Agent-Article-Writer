@@ -33,10 +33,10 @@ interface ArticleSettingsProps {
     newPrompt: string
   ) => Promise<void>;
   onDelete: () => void;
-  imageModel?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+  imageModel?: "gpt-image-1.5" | "gpt-image-1-mini";
   imageQuality?: "low" | "medium" | "high";
   onImageModelChange?: (
-    model: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini"
+    model: "gpt-image-1.5" | "gpt-image-1-mini"
   ) => void;
   onImageQualityChange?: (quality: "low" | "medium" | "high") => void;
 }

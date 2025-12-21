@@ -20,7 +20,7 @@ interface ImageLightboxProps {
   onNavigate?: (image: ImageItem) => void;
   onEditImage?: (imageId: string, newImageData: string, newPrompt: string) => Promise<void>;
   articleId?: string;
-  imageModel?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+  imageModel?: "gpt-image-1.5" | "gpt-image-1-mini";
   imageQuality?: "low" | "medium" | "high";
   isGeneratingImage?: boolean;
 }

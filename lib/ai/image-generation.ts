@@ -1,4 +1,4 @@
-export type ImageModel = "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+export type ImageModel = "gpt-image-1.5" | "gpt-image-1-mini";
 export type ImageQuality = "low" | "medium" | "high";
 
 export async function generateImage(

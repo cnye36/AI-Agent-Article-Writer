@@ -22,6 +22,8 @@ export function ArticlePublishingSection({
   const [editingSite, setEditingSite] = useState<string | null>(null);
   const [publishingToSite, setPublishingToSite] = useState<string | null>(null);
   const [publicationSlug, setPublicationSlug] = useState("");
+  const [isEditingDate, setIsEditingDate] = useState(false);
+  const [customPublishDate, setCustomPublishDate] = useState("");
 
   // Fetch sites and publications
   useEffect(() => {
@@ -144,6 +146,40 @@ export function ArticlePublishingSection({
     }
   };
 
+  const handleUpdatePublishDate = () => {
+    if (!customPublishDate) {
+      alert("Please enter a valid date");
+      return;
+    }
+
+    try {
+      const dateObj = new Date(customPublishDate);
+      if (isNaN(dateObj.getTime())) {
+        alert("Invalid date format");
+        return;
+      }
+
+      onUpdate({ published_at: dateObj.toISOString() });
+      setIsEditingDate(false);
+      setCustomPublishDate("");
+    } catch (error) {
+      console.error("Error updating publish date:", error);
+      alert("Failed to update publish date");
+    }
+  };
+
+  const formatDateForInput = (dateString: string) => {
+    // Convert ISO string to format suitable for datetime-local input
+    // datetime-local expects: YYYY-MM-DDTHH:mm
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   const getPublicationForSite = (siteId: string) => {
     return publications.find((p) => p.site_id === siteId);
   };
@@ -161,11 +197,54 @@ export function ArticlePublishingSection({
     <section className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6">
       <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">Publishing</h2>
       <div className="space-y-6">
-        {article.published_at && (
-          <div>
-            <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">
-              Published
+        {/* Publication Date Section */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm text-slate-700 dark:text-zinc-400">
+              Publication Date
             </label>
+            {article.published_at && !isEditingDate && (
+              <button
+                onClick={() => {
+                  setIsEditingDate(true);
+                  if (article.published_at) {
+                    setCustomPublishDate(formatDateForInput(article.published_at));
+                  }
+                }}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+              >
+                Edit
+              </button>
+            )}
+          </div>
+
+          {isEditingDate ? (
+            <div className="space-y-2">
+              <input
+                type="datetime-local"
+                value={customPublishDate}
+                onChange={(e) => setCustomPublishDate(e.target.value)}
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleUpdatePublishDate}
+                  className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white font-medium"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setIsEditingDate(false);
+                    setCustomPublishDate("");
+                  }}
+                  className="px-3 py-1.5 bg-slate-200 dark:bg-zinc-700 hover:bg-slate-300 dark:hover:bg-zinc-600 rounded text-xs text-slate-900 dark:text-white"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : article.published_at ? (
             <p className="text-slate-900 dark:text-white">
               {formatDate(article.published_at, {
                 year: "numeric",
@@ -175,8 +254,23 @@ export function ArticlePublishingSection({
                 minute: "2-digit",
               })}
             </p>
-          </div>
-        )}
+          ) : (
+            <div className="space-y-2">
+              <p className="text-slate-600 dark:text-zinc-500 text-sm mb-2">
+                Not yet published
+              </p>
+              <button
+                onClick={() => {
+                  setIsEditingDate(true);
+                  setCustomPublishDate(formatDateForInput(new Date().toISOString()));
+                }}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white font-medium"
+              >
+                Set Publication Date
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Publishing Sites Management */}
         <div>

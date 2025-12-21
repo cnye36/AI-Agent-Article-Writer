@@ -20,11 +20,11 @@ interface AIAssistantPanelProps {
   onGenerateImage: (params: {
     prompt?: string;
     sectionContent?: string;
-    model?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+    model?: "gpt-image-1.5" | "gpt-image-1-mini";
     quality?: "low" | "medium" | "high";
   }) => Promise<void>;
   onGenerateCover?: (params?: {
-    model?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+    model?: "gpt-image-1.5" | "gpt-image-1-mini";
     quality?: "low" | "medium" | "high";
   }) => void;
   isGeneratingCoverImage?: boolean;
@@ -36,17 +36,16 @@ interface AIAssistantPanelProps {
     newImageData: string,
     newPrompt: string
   ) => Promise<void>;
+  onUploadImage?: (file: File, isCover?: boolean) => Promise<void>;
   isGeneratingImage?: boolean;
   activeTab?: "text" | "image";
   onTabChange?: (tab: "text" | "image") => void;
   onRunEditor?: () => Promise<void>;
   isRunningEditor?: boolean;
   articleId?: string;
-  imageModel?: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
+  imageModel?: "gpt-image-1.5" | "gpt-image-1-mini";
   imageQuality?: "low" | "medium" | "high";
-  onImageModelChange?: (
-    model: "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini"
-  ) => void;
+  onImageModelChange?: (model: "gpt-image-1.5" | "gpt-image-1-mini") => void;
   onImageQualityChange?: (quality: "low" | "medium" | "high") => void;
 }
 
@@ -63,6 +62,7 @@ export function AIAssistantPanel({
   onSetCoverImage,
   onDeleteImage,
   onEditImage,
+  onUploadImage,
   isGeneratingImage = false,
   activeTab: controlledActiveTab,
   onTabChange,
@@ -71,9 +71,9 @@ export function AIAssistantPanel({
   articleId,
   imageModel = "gpt-image-1-mini",
   imageQuality = "high",
-  onImageModelChange,
-  onImageQualityChange,
-}: AIAssistantPanelProps) {
+}: // onImageModelChange and onImageQualityChange are intentionally omitted
+// as the image settings UI has been moved to the settings modal
+AIAssistantPanelProps) {
   const [customPrompt, setCustomPrompt] = useState("");
   const [internalActiveTab, setInternalActiveTab] = useState<"text" | "image">(
     "text"
@@ -245,150 +245,29 @@ export function AIAssistantPanel({
         ) : (
           /* Image Generation Tab */
           <div className="space-y-6">
-            {/* Image Settings */}
-            <div className="space-y-3 bg-slate-50 dark:bg-zinc-900/50 rounded-lg p-3 border border-slate-200 dark:border-zinc-800">
-              <h4 className="text-sm font-medium text-slate-900 dark:text-white">
-                Image Settings
-              </h4>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-slate-700 dark:text-zinc-400 mb-1.5 block">
-                    Model
-                  </label>
-                  <select
-                    value={imageModel}
-                    onChange={(e) => {
-                      const newModel = e.target.value as
-                        | "gpt-image-1.5"
-                        | "gpt-image-1"
-                        | "gpt-image-1-mini";
-                      console.log(
-                        "🎨 [AIAssistantPanel] SELECT onChange FIRED!"
-                      );
-                      console.log(
-                        "🎨 [AIAssistantPanel] Changing model from:",
-                        imageModel,
-                        "to:",
-                        newModel
-                      );
-                      onImageModelChange?.(newModel);
-                      console.log(
-                        "🎨 [AIAssistantPanel] onImageModelChange called with:",
-                        newModel
-                      );
-                    }}
-                    className="w-full bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-lg p-2 text-sm text-slate-900 dark:text-white focus:border-blue-500/50 outline-none"
-                  >
-                    <option value="gpt-image-1.5">GPT Image 1.5</option>
-                    <option value="gpt-image-1">GPT Image 1</option>
-                    <option value="gpt-image-1-mini">GPT Image 1 Mini</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-700 dark:text-zinc-400 mb-1.5 block">
-                    Quality
-                  </label>
-                  <select
-                    value={imageQuality}
-                    onChange={(e) => {
-                      const newQuality = e.target.value as
-                        | "low"
-                        | "medium"
-                        | "high";
-                      console.log(
-                        "🎨 [AIAssistantPanel] Quality changed from:",
-                        imageQuality,
-                        "to:",
-                        newQuality
-                      );
-                      onImageQualityChange?.(newQuality);
-                    }}
-                    className="w-full bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-lg p-2 text-sm text-slate-900 dark:text-white focus:border-blue-500/50 outline-none"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Context Aware Section */}
-            {selectedText ? (
-              <div className="space-y-3">
-                <div className="bg-slate-100 dark:bg-zinc-900 rounded-lg p-3 border border-slate-200 dark:border-zinc-800">
-                  <p className="text-xs text-slate-600 dark:text-zinc-500 mb-2">
-                    Selected Context:
-                  </p>
-                  <p className="text-sm text-slate-800 dark:text-zinc-300 line-clamp-3 italic">
-                    &quot;{selectedText}&quot;
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs text-slate-700 dark:text-zinc-400">
-                    Instructions (Optional)
-                  </label>
-                  <textarea
-                    value={imagePrompt}
-                    onChange={(e) => setImagePrompt(e.target.value)}
-                    placeholder="E.g., A minimalist line chart..."
-                    className="w-full h-20 bg-white dark:bg-zinc-900 rounded-lg p-3 text-sm resize-none border border-slate-300 dark:border-zinc-700/50 focus:border-blue-500/50 outline-none text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500"
-                  />
-                  <button
-                    onClick={async () => {
-                      console.log(
-                        "🎨 AIAssistantPanel: Generate from Selection clicked"
-                      );
-                      console.log(
-                        "🎨 AIAssistantPanel: imageModel state:",
-                        imageModel
-                      );
-                      console.log(
-                        "🎨 AIAssistantPanel: Calling onGenerateImage with model:",
-                        imageModel
-                      );
-                      setActiveTab("image"); // Ensure we're on image tab
-                      const prompt = imagePrompt
-                        ? `${imagePrompt}. Based on text: ${selectedText}`
-                        : undefined;
-                      await onGenerateImage({
-                        prompt,
-                        sectionContent: selectedText,
-                        model: imageModel,
-                        quality: imageQuality,
-                      });
-                      setImagePrompt("");
-                    }}
-                    disabled={isLoading || isGeneratingImage}
-                    className="w-full py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {isLoading || isGeneratingImage
-                      ? "Generating..."
-                      : "Generate from Selection"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 bg-slate-50 dark:bg-zinc-900/50 rounded-lg border border-dashed border-slate-300 dark:border-zinc-800 text-center">
-                <p className="text-sm text-slate-600 dark:text-zinc-500">
-                  Select text in the editor to generate contextual images.
-                </p>
-              </div>
-            )}
-
-            <div className="w-full h-px bg-slate-200 dark:bg-zinc-800" />
-
             {/* General Image Creation */}
             <div className="space-y-3">
               <h4 className="text-sm font-medium text-slate-900 dark:text-white">
                 Create New Image
               </h4>
+              {selectedText && (
+                <div className="bg-white dark:bg-zinc-900 rounded-t-lg border border-b-0 border-slate-300 dark:border-zinc-700/50 px-3 py-2">
+                  <p className="text-sm italic text-slate-600 dark:text-zinc-400">
+                    {selectedText}
+                  </p>
+                </div>
+              )}
               <textarea
                 value={imagePrompt}
                 onChange={(e) => setImagePrompt(e.target.value)}
-                placeholder="Describe the image you want to create..."
-                className="w-full h-24 bg-white dark:bg-zinc-900 rounded-lg p-3 text-sm resize-none border border-slate-300 dark:border-zinc-700/50 focus:border-blue-500/50 outline-none text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500"
+                placeholder={
+                  selectedText
+                    ? "Add instructions or modify the prompt above..."
+                    : "Describe the image you want to create..."
+                }
+                className={`w-full min-h-24 max-h-64 bg-white dark:bg-zinc-900 rounded-lg p-3 text-sm resize-y overflow-y-auto border border-slate-300 dark:border-zinc-700/50 focus:border-blue-500/50 outline-none text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 scrollbar-thin ${
+                  selectedText ? "rounded-t-none" : ""
+                }`}
               />
               <button
                 onClick={async () => {
@@ -401,24 +280,38 @@ export function AIAssistantPanel({
                     "🎨 AIAssistantPanel: imageQuality state:",
                     imageQuality
                   );
+
+                  // Combine selected text and user input
+                  const finalPrompt = selectedText
+                    ? imagePrompt
+                      ? `${imagePrompt} ${selectedText}`
+                      : selectedText
+                    : imagePrompt;
+
                   console.log(
                     "🎨 AIAssistantPanel: Calling onGenerateImage with:",
                     {
-                      prompt: imagePrompt,
+                      prompt: finalPrompt,
+                      sectionContent: selectedText || undefined,
                       model: imageModel,
                       quality: imageQuality,
                     }
                   );
                   setActiveTab("image"); // Switch to image tab
                   await onGenerateImage({
-                    prompt: imagePrompt,
+                    prompt: finalPrompt || undefined,
+                    sectionContent: selectedText || undefined,
                     model: imageModel,
                     quality: imageQuality,
                   });
                   setImagePrompt("");
                 }}
-                disabled={!imagePrompt || isGeneratingImage || isLoading}
-                className="w-full py-2 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-slate-900 dark:text-white"
+                disabled={
+                  (!imagePrompt && !selectedText) ||
+                  isGeneratingImage ||
+                  isLoading
+                }
+                className="w-full py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-white"
               >
                 {isGeneratingImage || isLoading ? (
                   <>
@@ -508,6 +401,8 @@ export function AIAssistantPanel({
               }
             }}
             onDeleteImage={onDeleteImage}
+            onUploadImage={onUploadImage}
+            articleId={articleId}
           />
         )}
       </div>

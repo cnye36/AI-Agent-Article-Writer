@@ -1,6 +1,128 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Parse form data
+    const formData = await req.formData();
+    const file = formData.get("file") as File;
+    const articleId = formData.get("articleId") as string;
+    const isCover = formData.get("isCover") === "true";
+
+    if (!file) {
+      return NextResponse.json(
+        { error: "No file provided" },
+        { status: 400 }
+      );
+    }
+
+    if (!articleId) {
+      return NextResponse.json(
+        { error: "articleId is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate file type
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      return NextResponse.json(
+        { error: "Invalid file type. Only JPEG, PNG, GIF, and WebP are supported." },
+        { status: 400 }
+      );
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      return NextResponse.json(
+        { error: "File size exceeds 10MB limit" },
+        { status: 400 }
+      );
+    }
+
+    // Verify article ownership
+    const { data: article, error: articleError } = await supabase
+      .from("articles")
+      .select("id, user_id")
+      .eq("id", articleId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (articleError || !article) {
+      return NextResponse.json(
+        { error: "Article not found or unauthorized" },
+        { status: 404 }
+      );
+    }
+
+    // Convert file to base64
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString("base64");
+    const mimeType = file.type;
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+
+    // If this is a cover image, unset all other cover images first
+    if (isCover) {
+      await supabase
+        .from("article_images")
+        .update({ is_cover: false })
+        .eq("article_id", articleId);
+    }
+
+    // Save image to database
+    const { data: imageData, error: insertError } = await supabase
+      .from("article_images")
+      .insert({
+        article_id: articleId,
+        url: dataUrl,
+        prompt: `Uploaded: ${file.name}`,
+        is_cover: isCover || false,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error("Failed to save uploaded image:", insertError);
+      return NextResponse.json(
+        { error: "Failed to save image" },
+        { status: 500 }
+      );
+    }
+
+    // If this is a cover image, also update the article's cover_image field
+    if (isCover && imageData) {
+      await supabase
+        .from("articles")
+        .update({ cover_image: imageData.url })
+        .eq("id", articleId);
+    }
+
+    return NextResponse.json({
+      success: true,
+      image: imageData,
+    });
+  } catch (error) {
+    console.error("API Error:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PATCH(req: NextRequest) {
   try {
     const { articleId, imageId, isCover, imageData, prompt } = await req.json();
