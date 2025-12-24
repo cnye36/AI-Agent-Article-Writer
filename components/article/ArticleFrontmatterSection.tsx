@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { Check, Copy } from "lucide-react";
 import { generateFrontmatter, type FrontmatterData } from "@/lib/frontmatter";
 import { copyToClipboard as copyToClipboardUtil } from "@/lib/utils";
 import type { Article, ArticleImage } from "@/types";
@@ -58,24 +59,115 @@ export function ArticleFrontmatterSection({
     [article, frontmatterData, coverImage]
   );
 
-  const handleGenerate = () => {
-    // Auto-generate from article data
-    setFrontmatterData({
-      title: article.title,
-      description: article.excerpt || generateDescription(article.content),
-      date: formatDateForInput(article.published_at || article.created_at),
-      author: "Curtis Nye",
-      categories: deriveCategories(article),
-      tags: deriveTags(article),
-      featuredImage: coverImage
-        ? {
-            src: `/images/blog-images/${article.slug}.png`,
-            alt: generateImageAlt(),
-            width: 1024,
-            height: 768,
-          }
-        : undefined,
-    });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  // Reset copy success state after 2 seconds
+  useEffect(() => {
+    if (copySuccess) {
+      const timer = setTimeout(() => setCopySuccess(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [copySuccess]);
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    try {
+      // Call the frontmatter agent API
+      const response = await fetch("/api/agents/frontmatter", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          articleId: article.id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate frontmatter");
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.frontmatter) {
+        // Get the generated description
+        const generatedDescription =
+          result.frontmatter.description ||
+          article.excerpt ||
+          generateDescription(article.content);
+
+        // Merge AI-generated frontmatter with existing data
+        const newFrontmatterData = {
+          title: article.title,
+          description: generatedDescription,
+          date: formatDateForInput(article.published_at || article.created_at),
+          author: "Curtis Nye",
+          categories:
+            result.frontmatter.categories || deriveCategories(article),
+          tags: result.frontmatter.tags || deriveTags(article),
+          featuredImage: coverImage
+            ? {
+                src: `/images/blog-images/${article.slug}.png`,
+                alt: generateImageAlt(),
+                width: 1024,
+                height: 768,
+              }
+            : undefined,
+        };
+
+        setFrontmatterData(newFrontmatterData);
+
+        // Update the article's excerpt field with the generated description
+        const currentMetadata = article.metadata || {};
+        await onUpdate({
+          excerpt: generatedDescription,
+          metadata: {
+            ...currentMetadata,
+            frontmatter: newFrontmatterData as unknown as Record<string, unknown>,
+          },
+        } as Partial<Article>);
+      } else {
+        // Fallback to basic generation if agent fails
+        setFrontmatterData({
+          title: article.title,
+          description: article.excerpt || generateDescription(article.content),
+          date: formatDateForInput(article.published_at || article.created_at),
+          author: "Curtis Nye",
+          categories: deriveCategories(article),
+          tags: deriveTags(article),
+          featuredImage: coverImage
+            ? {
+                src: `/images/blog-images/${article.slug}.png`,
+                alt: generateImageAlt(),
+                width: 1024,
+                height: 768,
+              }
+            : undefined,
+        });
+      }
+    } catch (error) {
+      console.error("Error generating frontmatter:", error);
+      // Fallback to basic generation on error
+      setFrontmatterData({
+        title: article.title,
+        description: article.excerpt || generateDescription(article.content),
+        date: formatDateForInput(article.published_at || article.created_at),
+        author: "Curtis Nye",
+        categories: deriveCategories(article),
+        tags: deriveTags(article),
+        featuredImage: coverImage
+          ? {
+              src: `/images/blog-images/${article.slug}.png`,
+              alt: generateImageAlt(),
+              width: 1024,
+              height: 768,
+            }
+          : undefined,
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleSave = async () => {
@@ -93,28 +185,40 @@ export function ArticleFrontmatterSection({
   const handleCopyYAML = async () => {
     const success = await copyToClipboardUtil(yamlPreview);
     if (success) {
-      alert("Frontmatter YAML copied to clipboard!");
-    } else {
-      alert("Failed to copy to clipboard");
+      setCopySuccess(true);
     }
+    // Silently fail - user can try again if needed
   };
 
   return (
     <section className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Frontmatter</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+          Frontmatter
+        </h2>
         <div className="flex gap-2">
           <button
             onClick={handleGenerate}
-            className="px-3 py-1.5 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded text-sm text-slate-900 dark:text-white"
+            disabled={isGenerating}
+            className="px-3 py-1.5 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded text-sm text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Generate
+            {isGenerating ? "Generating..." : "Generate with AI"}
           </button>
           <button
             onClick={handleCopyYAML}
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm text-white"
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm text-white flex items-center gap-1.5 transition-colors"
           >
-            Copy YAML
+            {copySuccess ? (
+              <>
+                <Check className="w-4 h-4" />
+                <span>Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                <span>Copy YAML</span>
+              </>
+            )}
           </button>
           <button
             onClick={() => setIsEditing(!isEditing)}
@@ -128,12 +232,17 @@ export function ArticleFrontmatterSection({
       {isEditing ? (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">Title</label>
+            <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">
+              Title
+            </label>
             <input
               type="text"
               value={frontmatterData.title}
               onChange={(e) =>
-                setFrontmatterData({ ...frontmatterData, title: e.target.value })
+                setFrontmatterData({
+                  ...frontmatterData,
+                  title: e.target.value,
+                })
               }
               className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
@@ -158,7 +267,9 @@ export function ArticleFrontmatterSection({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">Date</label>
+              <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">
+                Date
+              </label>
               <input
                 type="date"
                 value={frontmatterData.date}
@@ -173,7 +284,9 @@ export function ArticleFrontmatterSection({
             </div>
 
             <div>
-              <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">Author</label>
+              <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-1">
+                Author
+              </label>
               <input
                 type="text"
                 value={frontmatterData.author}
@@ -228,10 +341,14 @@ export function ArticleFrontmatterSection({
 
           {frontmatterData.featuredImage && (
             <div className="space-y-2">
-              <label className="block text-sm text-slate-700 dark:text-zinc-400">Featured Image</label>
+              <label className="block text-sm text-slate-700 dark:text-zinc-400">
+                Featured Image
+              </label>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">Source</label>
+                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">
+                    Source
+                  </label>
                   <input
                     type="text"
                     value={frontmatterData.featuredImage.src}
@@ -248,7 +365,9 @@ export function ArticleFrontmatterSection({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">Alt Text</label>
+                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">
+                    Alt Text
+                  </label>
                   <input
                     type="text"
                     value={frontmatterData.featuredImage.alt}
@@ -265,7 +384,9 @@ export function ArticleFrontmatterSection({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">Width</label>
+                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">
+                    Width
+                  </label>
                   <input
                     type="number"
                     value={frontmatterData.featuredImage.width || 1024}
@@ -282,7 +403,9 @@ export function ArticleFrontmatterSection({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">Height</label>
+                  <label className="block text-xs text-slate-600 dark:text-zinc-500 mb-1">
+                    Height
+                  </label>
                   <input
                     type="number"
                     value={frontmatterData.featuredImage.height || 768}
@@ -319,7 +442,9 @@ export function ArticleFrontmatterSection({
         </div>
       ) : (
         <div>
-          <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-2">YAML Preview</label>
+          <label className="block text-sm text-slate-700 dark:text-zinc-400 mb-2">
+            YAML Preview
+          </label>
           <pre className="p-4 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg text-xs text-slate-800 dark:text-zinc-300 font-mono overflow-x-auto max-h-96 overflow-y-auto">
             {yamlPreview}
           </pre>

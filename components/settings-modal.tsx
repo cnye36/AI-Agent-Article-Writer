@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Bell,
@@ -14,10 +14,14 @@ import {
   Shield,
   User,
   X,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { useAuth } from "@/hooks/use-auth";
 import { PublishingSitesSection } from "@/components/settings/PublishingSitesSection";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { INDUSTRIES } from "@/lib/onboarding-config";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -119,6 +123,8 @@ export function SettingsModal({
 }
 
 function SettingsSection({ user }: { user: SupabaseUser | null }) {
+  const router = useRouter();
+  const { preferences, resetOnboarding } = useUserPreferences();
   const [email, setEmail] = useState(user?.email || "");
   const [name, setName] = useState("");
   const [notifications, setNotifications] = useState({
@@ -135,7 +141,7 @@ function SettingsSection({ user }: { user: SupabaseUser | null }) {
         return saved;
       }
     }
-    return "gpt-image-1-mini";
+    return "gpt-image-1.5";
   });
   const [imageQuality, setImageQuality] = useState<"low" | "medium" | "high">(() => {
     if (typeof window !== "undefined") {
@@ -144,9 +150,10 @@ function SettingsSection({ user }: { user: SupabaseUser | null }) {
         return saved;
       }
     }
-    return "high";
+    return "medium";
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -160,6 +167,29 @@ function SettingsSection({ user }: { user: SupabaseUser | null }) {
       setIsSaving(false);
     }, 1000);
   };
+
+  const handleRetakeOnboarding = async () => {
+    if (!confirm("Are you sure you want to retake the onboarding? This will reset your current content preferences.")) {
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      await resetOnboarding();
+      // Reload the page to show onboarding
+      router.refresh();
+    } catch (error) {
+      console.error("Error resetting onboarding:", error);
+      alert("Failed to reset onboarding. Please try again.");
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  // Get industry info for display
+  const industryConfig = preferences?.primaryIndustry
+    ? INDUSTRIES[preferences.primaryIndustry]
+    : null;
 
   return (
     <div className="space-y-8">
@@ -270,6 +300,89 @@ function SettingsSection({ user }: { user: SupabaseUser | null }) {
           </label>
         </div>
       </section>
+
+      {/* Content Preferences Section */}
+      {preferences && industryConfig && (
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="w-5 h-5 text-slate-600 dark:text-zinc-400" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+              Content Preferences
+            </h3>
+          </div>
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 dark:bg-blue-500/10 rounded-lg border border-blue-200 dark:border-blue-500/30">
+              <div className="mb-3">
+                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">
+                  Primary Industry
+                </p>
+                <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                  {industryConfig.name}
+                </p>
+                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                  {industryConfig.description}
+                </p>
+              </div>
+
+              {preferences.selectedSubcategories && preferences.selectedSubcategories.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-2">
+                    Focus Areas
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {industryConfig.subcategories
+                      .filter((sub) => preferences.selectedSubcategories.includes(sub.id))
+                      .map((sub) => (
+                        <span
+                          key={sub.id}
+                          className="px-2 py-1 bg-blue-100 dark:bg-blue-500/20 border border-blue-200 dark:border-blue-500/40 rounded-full text-xs text-blue-800 dark:text-blue-200"
+                        >
+                          {sub.name}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {preferences.customKeywords && preferences.customKeywords.length > 0 && (
+                <div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-2">
+                    Custom Keywords
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {preferences.customKeywords.map((keyword) => (
+                      <span
+                        key={keyword}
+                        className="px-2 py-1 bg-slate-100 dark:bg-zinc-700 rounded-full text-xs text-slate-700 dark:text-zinc-300"
+                      >
+                        {keyword}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleRetakeOnboarding}
+              disabled={isResetting}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 border border-slate-300 dark:border-zinc-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isResetting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              <span className="text-sm font-medium text-slate-900 dark:text-white">
+                {isResetting ? "Resetting..." : "Retake Onboarding Survey"}
+              </span>
+            </button>
+            <p className="text-xs text-slate-500 dark:text-zinc-400">
+              Retake the survey to change your industry focus and content preferences. This will customize your dashboard, keyword suggestions, and article topics.
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* Preferences Section */}
       <section>

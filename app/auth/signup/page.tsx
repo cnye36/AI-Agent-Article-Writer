@@ -1,16 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useToast } from "@/components/ui/toast";
 
-export default function SignUpPage() {
+function SignUpForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { showToast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  
+  const redirectUrl = searchParams.get("redirect") || "/auth/signin";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,8 +49,12 @@ export default function SignUpPage() {
       }
 
       // Show success message and redirect
-      alert(data.message || "Account created! Please check your email to verify your account.");
-      router.push("/auth/signin");
+      showToast(
+        data.message ||
+          "Account created! Please check your email to verify your account.",
+        "success"
+      );
+      setTimeout(() => router.push(redirectUrl), 1500);
     } catch (err) {
       setError("An unexpected error occurred");
     } finally {
@@ -145,6 +154,31 @@ export default function SignUpPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8">
+            <div className="animate-pulse space-y-4">
+              <div className="h-8 bg-zinc-800 rounded w-1/2"></div>
+              <div className="h-4 bg-zinc-800 rounded w-3/4"></div>
+              <div className="space-y-3 pt-4">
+                <div className="h-10 bg-zinc-800 rounded"></div>
+                <div className="h-10 bg-zinc-800 rounded"></div>
+                <div className="h-10 bg-zinc-800 rounded"></div>
+                <div className="h-10 bg-zinc-800 rounded"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    }>
+      <SignUpForm />
+    </Suspense>
   );
 }
 

@@ -122,11 +122,7 @@ export function FeaturesSection() {
     <section id="features" className="py-24 bg-white dark:bg-zinc-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section header */}
-        <div className="text-center space-y-4 mb-16">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-sm font-medium">
-            <Sparkles className="w-4 h-4" />
-            Powerful Features
-          </div>
+        <div className="text-center space-y-4 mb-8">
           <h2 className="text-4xl sm:text-5xl font-bold text-zinc-900 dark:text-white">
             Everything You Need to
             <br />
@@ -135,8 +131,9 @@ export function FeaturesSection() {
             </span>
           </h2>
           <p className="max-w-2xl mx-auto text-lg text-zinc-600 dark:text-zinc-400">
-            A complete AI-powered content creation platform with advanced features
-            to help you write, edit, and publish professional articles faster.
+            A complete AI-powered content creation platform with advanced
+            features to help you write, edit, and publish professional articles
+            faster.
           </p>
         </div>
 

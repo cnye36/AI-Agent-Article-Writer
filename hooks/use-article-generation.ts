@@ -98,15 +98,24 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
             .map((s) => s.trim())
             .filter((s) => s.length > 0);
 
-        const effectiveKeywords =
-          cfg.topicMode === "direct"
-            ? cfg.topicQuery?.trim()
-              ? parseCommaList(cfg.topicQuery)
-              : cfg.customInstructions?.trim()
-              ? // Fallback: use first line of the brief as a seed query
-                [cfg.customInstructions.split("\n")[0]!.trim()].filter(Boolean)
-              : cfg.keywords
+        // Determine mode and keywords
+        let mode: "discover" | "direct" | "prompt" = cfg.topicMode || "discover";
+        let effectiveKeywords: string[] | undefined = undefined;
+
+        if (mode === "prompt") {
+          // Prompt mode: keywords from promptInput if using search
+          // API will handle keyword extraction
+          effectiveKeywords = undefined;
+        } else if (mode === "direct") {
+          effectiveKeywords = cfg.topicQuery?.trim()
+            ? parseCommaList(cfg.topicQuery)
+            : cfg.customInstructions?.trim()
+            ? [cfg.customInstructions.split("\n")[0]!.trim()].filter(Boolean)
             : cfg.keywords;
+        } else {
+          // Discover mode
+          effectiveKeywords = cfg.keywords;
+        }
 
         const requestBody = {
           ...(cfg.industry && cfg.industry.trim()
@@ -116,8 +125,15 @@ export function useArticleGeneration(): UseArticleGenerationReturn {
             ? { keywords: effectiveKeywords }
             : {}),
           ...(cfg.articleType ? { articleType: cfg.articleType } : {}),
-          // For "direct" mode we want a single best-fit topic backed by sources
-          maxTopics: cfg.topicMode === "direct" ? 1 : 5,
+          mode: mode,
+          ...(mode === "prompt" && cfg.promptInput
+            ? { promptInput: cfg.promptInput }
+            : {}),
+          ...(mode === "prompt"
+            ? { useSearchInPrompt: cfg.useSearchInPrompt || false }
+            : {}),
+          maxTopics:
+            mode === "direct" ? 1 : mode === "prompt" ? 10 : 12,
         };
 
         const response = await fetch(endpoint, {

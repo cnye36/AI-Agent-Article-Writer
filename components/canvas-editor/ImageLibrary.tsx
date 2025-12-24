@@ -4,6 +4,8 @@ import { useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { downloadImage, generateFilename } from "@/lib/image-utils";
+import { useToast } from "@/components/ui/toast";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface ImageItem {
   id: string;
@@ -31,6 +33,8 @@ export function ImageLibrary({
 }: ImageLibraryProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const { showToast } = useToast();
+  const { confirm } = useConfirmDialog();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -56,7 +60,7 @@ export function ImageLibrary({
         await onUploadImage(file, false);
       } catch (error) {
         console.error("Failed to upload image:", error);
-        alert("Failed to upload image. Please try again.");
+        showToast("Failed to upload image. Please try again.", "error");
       } finally {
         setIsUploading(false);
       }
@@ -72,7 +76,7 @@ export function ImageLibrary({
         e.target.value = ""; // Reset input
       } catch (error) {
         console.error("Failed to upload image:", error);
-        alert("Failed to upload image. Please try again.");
+        showToast("Failed to upload image. Please try again.", "error");
       } finally {
         setIsUploading(false);
       }
@@ -269,11 +273,15 @@ export function ImageLibrary({
                   onClick={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
-                    if (
-                      confirm("Are you sure you want to delete this image?")
-                    ) {
-                      onDeleteImage(img.id);
-                    }
+                    confirm({
+                      message: "Are you sure you want to delete this image?",
+                      variant: "danger",
+                      confirmText: "Delete",
+                    }).then((confirmed: boolean) => {
+                      if (confirmed) {
+                        onDeleteImage(img.id);
+                      }
+                    });
                   }}
                   className="p-2 bg-red-600/90 hover:bg-red-500 rounded-lg text-white transition-colors shadow-lg"
                   title="Delete image"

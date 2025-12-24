@@ -57,8 +57,8 @@ export function ArticleSettings({
   onImageNavigate,
   onEditImage,
   onDelete,
-  imageModel = "gpt-image-1-mini",
-  imageQuality = "high",
+  imageModel = "gpt-image-1.5",
+  imageQuality = "medium",
   onImageModelChange,
   onImageQualityChange,
 }: ArticleSettingsProps) {

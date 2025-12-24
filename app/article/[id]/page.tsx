@@ -11,8 +11,7 @@ import { ArticleSettings } from "@/components/article/ArticleSettings";
 import { LoadingStates } from "@/components/article/LoadingStates";
 import { PublishModal } from "@/components/article/PublishModal";
 import { useAuth } from "@/hooks/use-auth";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { UserNav } from "@/components/user-nav";
+import { DashboardHeader } from "@/components/dashboard-header";
 import type { Article, ArticleImage } from "@/types";
 
 export default function ArticlePage() {
@@ -44,7 +43,7 @@ export default function ArticlePage() {
         return saved;
       }
     }
-    return "gpt-image-1-mini";
+    return "gpt-image-1.5";
   });
   const [imageQuality, setImageQuality] = useState<"low" | "medium" | "high">(() => {
     if (typeof window !== "undefined") {
@@ -53,7 +52,7 @@ export default function ArticlePage() {
         return saved;
       }
     }
-    return "high";
+    return "medium";
   });
   const [showPublishModal, setShowPublishModal] = useState(false);
 
@@ -563,35 +562,7 @@ export default function ArticlePage() {
   return (
     <>
       <div className="h-screen overflow-hidden bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white flex flex-col">
-        {/* Main Dashboard Header */}
-        <header className="border-b border-slate-200 dark:border-zinc-800 px-4 sm:px-6 py-4 bg-white dark:bg-zinc-950">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <h1 className="text-xl font-bold">Let AI Write It!</h1>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
-              <nav className="flex gap-1 bg-slate-100 dark:bg-zinc-900 rounded-lg p-1 w-full sm:w-auto">
-                {["overview", "create", "topics", "library", "published"].map(
-                  (tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => router.push(`/dashboard?tab=${tab}`)}
-                      className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
-                        false // Current tab is always false since we're not on dashboard
-                          ? "bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-sm"
-                          : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-zinc-800"
-                      }`}
-                    >
-                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                    </button>
-                  )
-                )}
-              </nav>
-              <div className="flex items-center gap-2 sm:gap-3">
-                <ThemeToggle />
-                <UserNav />
-              </div>
-            </div>
-          </div>
-        </header>
+        <DashboardHeader />
 
         {/* Article Header */}
         <ArticleHeader

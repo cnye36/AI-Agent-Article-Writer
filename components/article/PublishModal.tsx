@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/toast";
 import type { Article, PublishingSite } from "@/types";
 import { PRECONFIGURED_PUBLISHING_SITES, SITE_CATEGORIES, type SiteCategory } from "@/lib/publishing-sites";
 
@@ -27,6 +28,7 @@ export function PublishModal({
   const [isPublishing, setIsPublishing] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<SiteCategory>("All");
+  const { showToast } = useToast();
 
   // Fetch sites
   useEffect(() => {
@@ -107,7 +109,7 @@ export function PublishModal({
 
   const handlePublishClick = async () => {
     if (selectedSiteIds.length === 0) {
-      alert("Please select at least one publishing site");
+      showToast("Please select at least one publishing site", "warning");
       return;
     }
 
@@ -123,7 +125,7 @@ export function PublishModal({
       onClose();
     } catch (error) {
       console.error("Error publishing:", error);
-      alert("Failed to publish article. Please try again.");
+      showToast("Failed to publish article. Please try again.", "error");
     } finally {
       setIsPublishing(false);
     }

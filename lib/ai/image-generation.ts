@@ -4,8 +4,8 @@ export type ImageQuality = "low" | "medium" | "high";
 export async function generateImage(
   prompt: string,
   aspectRatio: "1:1" | "16:9" | "4:3" = "16:9",
-  model: ImageModel = "gpt-image-1-mini",
-  quality: ImageQuality = "high"
+  model: ImageModel = "gpt-image-1.5",
+  quality: ImageQuality = "medium"
 ) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {

@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getClient } from "@/lib/supabase/client";
-import { cn, formatRelativeTime, getStatusConfig, truncate } from "@/lib/utils";
+import { cn, formatRelativeTime, getStatusConfig } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Topic, Industry } from "@/types";
 
 interface TopicStatusFilter {
@@ -29,6 +31,8 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const { showToast } = useToast();
+  const { confirm } = useConfirmDialog();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
@@ -116,7 +120,7 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
   // Refresh topics from research agent
   const refreshTopics = useCallback(async () => {
     if (!selectedIndustry) {
-      alert("Please select an industry first");
+      showToast("Please select an industry first", "warning");
       return;
     }
 
@@ -140,7 +144,7 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
     } finally {
       setIsRefreshing(false);
     }
-  }, [selectedIndustry, industries, fetchTopics]);
+  }, [selectedIndustry, industries, fetchTopics, showToast]);
 
   // Update topic status
   const updateTopicStatus = useCallback(
@@ -162,27 +166,33 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
   );
 
   // Delete topic (single)
-  const deleteTopic = useCallback(async (topicId: string) => {
-    if (!confirm("Are you sure you want to permanently delete this topic?")) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/agents/research?id=${topicId}`, {
-        method: "DELETE",
+  const deleteTopic = useCallback(
+    async (topicId: string) => {
+      const confirmed = await confirm({
+        message: "Are you sure you want to permanently delete this topic?",
+        variant: "danger",
+        confirmText: "Delete",
       });
+      if (!confirmed) return;
 
-      if (response.ok) {
-        setTopics((prev) => prev.filter((t) => t.id !== topicId));
-      } else {
-        const data = await response.json();
-        alert(data.error || "Failed to delete topic");
+      try {
+        const response = await fetch(`/api/agents/research?id=${topicId}`, {
+          method: "DELETE",
+        });
+
+        if (response.ok) {
+          setTopics((prev) => prev.filter((t) => t.id !== topicId));
+        } else {
+          const data = await response.json();
+          showToast(data.error || "Failed to delete topic", "error");
+        }
+      } catch (error) {
+        console.error("Error deleting topic:", error);
+        showToast("Failed to delete topic", "error");
       }
-    } catch (error) {
-      console.error("Error deleting topic:", error);
-      alert("Failed to delete topic");
-    }
-  }, []);
+    },
+    [showToast, confirm]
+  );
 
   // Selection helpers
   const toggleSelection = useCallback((topicId: string) => {
@@ -213,33 +223,31 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
   const bulkArchive = useCallback(async () => {
     if (selectedTopics.size === 0) return;
 
-    if (
-      !confirm(
-        `Archive ${selectedTopics.size} topic${
-          selectedTopics.size === 1 ? "" : "s"
-        }?`
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirm({
+      message: `Archive ${selectedTopics.size} topic${
+        selectedTopics.size === 1 ? "" : "s"
+      }?`,
+      variant: "default",
+      confirmText: "Archive",
+    });
+    if (!confirmed) return;
 
     const ids = Array.from(selectedTopics);
     await Promise.all(ids.map((id) => updateTopicStatus(id, "rejected")));
     setSelectedTopics(new Set());
-  }, [selectedTopics, updateTopicStatus]);
+  }, [selectedTopics, updateTopicStatus, confirm]);
 
   const bulkDelete = useCallback(async () => {
     if (selectedTopics.size === 0) return;
 
-    if (
-      !confirm(
-        `Permanently delete ${selectedTopics.size} topic${
-          selectedTopics.size === 1 ? "" : "s"
-        }? This cannot be undone.`
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirm({
+      message: `Permanently delete ${selectedTopics.size} topic${
+        selectedTopics.size === 1 ? "" : "s"
+      }? This cannot be undone.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!confirmed) return;
 
     const ids = Array.from(selectedTopics);
     const deletedIds = new Set<string>();
@@ -272,11 +280,12 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
     setSelectedTopics(new Set());
 
     if (deletedIds.size !== ids.length) {
-      alert(
-        "Some topics could not be deleted. They may have associated outlines or other dependencies."
+      showToast(
+        "Some topics could not be deleted. They may have associated outlines or other dependencies.",
+        "warning"
       );
     }
-  }, [selectedTopics]);
+  }, [selectedTopics, confirm, showToast]);
 
   // Initial fetch
   useEffect(() => {
@@ -303,7 +312,9 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
               onClick={() => setViewMode("grid")}
               className={cn(
                 "p-2 rounded-md text-sm transition-colors",
-                viewMode === "grid" ? "bg-white dark:bg-zinc-700 shadow-sm" : "hover:bg-slate-50 dark:hover:bg-zinc-800"
+                viewMode === "grid"
+                  ? "bg-white dark:bg-zinc-700 shadow-sm"
+                  : "hover:bg-slate-50 dark:hover:bg-zinc-800"
               )}
               title="Grid view"
             >
@@ -313,7 +324,9 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
               onClick={() => setViewMode("list")}
               className={cn(
                 "p-2 rounded-md text-sm transition-colors",
-                viewMode === "list" ? "bg-white dark:bg-zinc-700 shadow-sm" : "hover:bg-slate-50 dark:hover:bg-zinc-800"
+                viewMode === "list"
+                  ? "bg-white dark:bg-zinc-700 shadow-sm"
+                  : "hover:bg-slate-50 dark:hover:bg-zinc-800"
               )}
               title="List view"
             >
@@ -358,7 +371,9 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
 
         {/* Industry Filter */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-600 dark:text-zinc-400">Industry:</span>
+          <span className="text-sm text-slate-600 dark:text-zinc-400">
+            Industry:
+          </span>
           <select
             value={selectedIndustry || ""}
             onChange={(e) => {
@@ -378,7 +393,9 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
 
         {/* Status Filter */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-600 dark:text-zinc-400">Status:</span>
+          <span className="text-sm text-slate-600 dark:text-zinc-400">
+            Status:
+          </span>
           <div className="flex gap-1 bg-slate-100 dark:bg-zinc-800 rounded-lg p-1">
             {TOPIC_STATUS_FILTERS.map(({ value, label }) => (
               <button
@@ -405,7 +422,9 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-600 dark:text-zinc-400">Sort by:</span>
+            <span className="text-sm text-slate-600 dark:text-zinc-400">
+              Sort by:
+            </span>
             <select
               value={`${sortBy}-${sortOrder}`}
               onChange={(e) => {
@@ -425,7 +444,9 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-600 dark:text-zinc-400">Per page:</span>
+            <span className="text-sm text-slate-600 dark:text-zinc-400">
+              Per page:
+            </span>
             <select
               value={pageSize}
               onChange={(e) => {
@@ -514,7 +535,9 @@ export function TopicFeed({ onSelectTopic }: TopicFeedProps) {
         </div>
       ) : topics.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-slate-600 dark:text-zinc-400 mb-4">No topics found</p>
+          <p className="text-slate-600 dark:text-zinc-400 mb-4">
+            No topics found
+          </p>
           <p className="text-sm text-slate-500 dark:text-zinc-500">
             {selectedIndustry
               ? "Try refreshing to discover new topics"

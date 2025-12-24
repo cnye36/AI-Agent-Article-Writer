@@ -36,33 +36,102 @@ const WriterState = Annotation.Root({
   fullArticle: Annotation<string>,
   coverImage: Annotation<string>,
   customInstructions: Annotation<string | undefined>,
+  retryCount: Annotation<number>,
 });
 
-const writerAgentPrompt = `You are an expert content writer with deep expertise across multiple industries.
-  
-  Writing Guidelines:
-  1. Match the tone and style to the article type
-  2. Use the outline as your structure - don't deviate
-  3. Incorporate sources naturally with proper attribution
-  4. Include internal links ONLY from the provided AllowedInternalLinks list - DO NOT invent URLs or slugs
-  5. Add at least 2 external links per article using markdown format [link text](URL) - these links MUST come from the provided Sources list and MUST be valid URLs
-  6. Write engaging, scannable content with varied sentence structure
-  7. Use concrete examples and data points
-  8. Avoid fluff - every sentence should add value
-  9. STRICTLY FORBIDDEN: Do not use em dashes (—). Use commas, parentheses, or colons instead. This is a critical requirement for authenticity.
-  10. If Custom Instructions are provided, you MUST follow them.
-  
+const writerAgentPrompt = `You are an expert content writer specializing in precision and conciseness.
+
+  ═══════════════════════════════════════════════════════════════════
+  🎯 PRIMARY DIRECTIVE: WORD COUNT COMPLIANCE
+  ═══════════════════════════════════════════════════════════════════
+
+  Your #1 priority is STAYING WITHIN THE WORD COUNT TARGET.
+  Everything else is secondary. A section that exceeds the word limit is REJECTED.
+
+  WORD COUNT STRATEGY:
+  1. Calculate your target paragraph structure BEFORE writing
+  2. For a 200-word section: Write 3 paragraphs of ~65 words each
+  3. For a 300-word section: Write 4 paragraphs of ~75 words each
+  4. For a 400-word section: Write 5 paragraphs of ~80 words each
+  5. After drafting each paragraph, count the words mentally
+  6. If approaching the limit, STOP and conclude the section
+  7. VALID RANGE: Target ±10% (e.g., 200 words = 180-220 words MAXIMUM)
+
+  COUNTING RULES:
+  - Count every word in markdown links: [link text](url) counts as 2 words
+  - Code blocks and tables DO count toward the total
+  - Headings (##) DO count toward the total
+  - Do NOT pad with filler - be concise and value-driven
+
+  ═══════════════════════════════════════════════════════════════════
+  📝 SECONDARY DIRECTIVES (only after word count is secured)
+  ═══════════════════════════════════════════════════════════════════
+
   Article Type: {articleType}
   Tone: {tone}
-  
-  You're writing section by section. For each section:
-  - Follow the key points in the outline
-  - Hit the word target (approximately)
-  - Transition smoothly from the previous section
-  - Insert internal links ONLY from AllowedInternalLinks - use the exact URL provided, format: [anchorText](url)
-  - Add at least 2 external links from the Sources list - use format [link text](https://valid-url.com) with URLs from the Sources list only
-  - IMPORTANT: Do not use any em dashes in your Writing.
-  - CRITICAL: Do not create internal links that are not in the AllowedInternalLinks list. If no internal links are allowed, do not add any.`;
+
+  CONTENT REQUIREMENTS:
+  1. Follow the outline structure - don't deviate from key points
+  2. Transition smoothly from previous sections
+  3. Use concrete examples and data points
+  4. Avoid fluff - every sentence must add value
+  5. Match the specified tone and article type
+  6. Incorporate sources naturally with attribution
+  7. If Custom Instructions are provided, follow them
+
+  FORMATTING RULES:
+  • Never use em dashes (—). Use commas, periods, parentheses, or colons instead
+  • For comparisons/data: Use markdown tables (| Header | Header |)
+  • For code/commands: Use code blocks with language tags (\`\`\`javascript)
+  • Use markdown format for all links: [link text](URL)
+
+  LINKING RULES:
+  • Internal links: ONLY use links from the AllowedInternalLinks list (exact URLs provided)
+  • External links: Add at least 2 using URLs from the Sources list
+  • DO NOT invent URLs or slugs - only use provided links
+  • If no internal links are allowed, do not create any
+
+  ═══════════════════════════════════════════════════════════════════
+  ⚠️ REJECTION CRITERIA
+  ═══════════════════════════════════════════════════════════════════
+  Your section will be REJECTED if:
+  - Word count exceeds target by >10%
+  - Word count falls short of target by >10%
+  - You use em dashes (—)
+  - You invent internal link URLs not in AllowedInternalLinks
+  - You fail to include at least 2 external links from Sources
+
+  Remember: WORD COUNT FIRST. Everything else second.`;
+
+// Helper function to count words in text (excluding markdown syntax)
+function countWords(text: string): number {
+  // Remove code blocks
+  let cleaned = text.replace(/```[\s\S]*?```/g, " ");
+  // Remove markdown links but keep link text: [text](url) -> text
+  cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  // Remove markdown formatting
+  cleaned = cleaned.replace(/[#*_~`]/g, "");
+  // Remove extra whitespace and count
+  const words = cleaned.trim().split(/\s+/).filter((word) => word.length > 0);
+  return words.length;
+}
+
+// Helper function to calculate recommended paragraph structure
+function getRecommendedStructure(wordTarget: number): string {
+  if (wordTarget <= 150) {
+    return "2 paragraphs × ~75 words each";
+  } else if (wordTarget <= 250) {
+    return "3 paragraphs × ~65-70 words each";
+  } else if (wordTarget <= 350) {
+    return "4 paragraphs × ~75-80 words each";
+  } else if (wordTarget <= 450) {
+    return "5 paragraphs × ~80-90 words each";
+  } else {
+    const numParagraphs = Math.ceil(wordTarget / 90);
+    const wordsPerParagraph = Math.floor(wordTarget / numParagraphs);
+    return `${numParagraphs} paragraphs × ~${wordsPerParagraph} words each`;
+  }
+}
 
 export function createWriterAgent() {
   const model = new ChatOpenAI({
@@ -109,21 +178,44 @@ export function createWriterAgent() {
         {
           role: "user",
           content: `
-  Previous sections for context:
-  ${previousContext}
-  
-  Now write this section:
+  ═══════════════════════════════════════════════════════════════════
+  📊 SECTION ASSIGNMENT
+  ═══════════════════════════════════════════════════════════════════
+
+  TARGET WORD COUNT: ${section.wordTarget} words
+  VALID RANGE: ${Math.floor(section.wordTarget * 0.9)}-${Math.ceil(section.wordTarget * 1.1)} words (±10%)
+
+  RECOMMENDED STRUCTURE:
+  ${getRecommendedStructure(section.wordTarget)}
+
+  ═══════════════════════════════════════════════════════════════════
+  📝 CONTENT BRIEF
+  ═══════════════════════════════════════════════════════════════════
+
   Heading: ${section.heading}
-  Key Points: ${section.keyPoints.join(", ")}
-  Word Target: ${
-    section.wordTarget
-  }${allowedInternalLinksText}${sourcesText}${customInstructionsText}
-  
-  CRITICAL REQUIREMENTS:
-  - Add at least 2 external links using URLs from the Sources list above
-  - Only use internal links from the AllowedInternalLinks list (if any)
-  - Do not invent or create any links that are not explicitly provided
-  - Use markdown format: [link text](URL)
+  Key Points to Cover: ${section.keyPoints.join(", ")}
+
+  Previous Context (for transitions):
+  ${previousContext || "[First section - no previous context]"}
+${allowedInternalLinksText}${sourcesText}${customInstructionsText}
+
+  ═══════════════════════════════════════════════════════════════════
+  ✍️ WRITING INSTRUCTIONS
+  ═══════════════════════════════════════════════════════════════════
+
+  STEP 1: Plan your paragraph structure (see RECOMMENDED STRUCTURE above)
+  STEP 2: Write each paragraph, counting words as you go
+  STEP 3: When you reach ~90% of target, start concluding
+  STEP 4: STOP writing when you hit the upper limit (${Math.ceil(section.wordTarget * 1.1)} words)
+
+  CRITICAL CHECKLIST:
+  ☐ Word count within ${Math.floor(section.wordTarget * 0.9)}-${Math.ceil(section.wordTarget * 1.1)} words
+  ☐ At least 2 external links from Sources list
+  ☐ Zero em dashes (—)
+  ☐ Only approved internal links (if any)
+  ☐ All key points covered
+
+  Write the section now. STOP immediately when approaching the word limit.
             `,
         },
       ]);
@@ -135,7 +227,51 @@ export function createWriterAgent() {
       return {
         sections: [...state.sections, content],
         currentSection: state.currentSection + 1,
+        // Don't reset retryCount here - let validateSection handle it
       };
+    })
+    .addNode("validateSection", async (state) => {
+      // Validate the most recently written section
+      const latestSection = state.sections[state.sections.length - 1];
+      const sectionIndex = state.sections.length - 1;
+      const targetWord = state.outline.sections[sectionIndex].wordTarget;
+      const actualWords = countWords(latestSection);
+      const minWords = Math.floor(targetWord * 0.9);
+      const maxWords = Math.ceil(targetWord * 1.1);
+
+      console.log(
+        `[Writer Agent] Section ${sectionIndex + 1} validation: ${actualWords} words (target: ${targetWord}, range: ${minWords}-${maxWords})`
+      );
+
+      const isValid = actualWords >= minWords && actualWords <= maxWords;
+
+      if (!isValid && state.retryCount < 2) {
+        // Section failed validation and we haven't exceeded retry limit
+        const overage = actualWords - maxWords;
+        const shortage = minWords - actualWords;
+
+        console.warn(
+          `[Writer Agent] Section ${sectionIndex + 1} FAILED validation. Retry ${state.retryCount + 1}/2`
+        );
+
+        // Remove the invalid section and retry
+        return {
+          sections: state.sections.slice(0, -1),
+          currentSection: state.currentSection - 1,
+          retryCount: state.retryCount + 1,
+        };
+      } else if (!isValid) {
+        // Exceeded retry limit - accept section with warning
+        console.warn(
+          `[Writer Agent] Section ${sectionIndex + 1} validation failed after 2 retries. Accepting anyway (${actualWords} words).`
+        );
+        // Reset retry count for next section
+        return { retryCount: 0 };
+      } else {
+        console.log(`[Writer Agent] Section ${sectionIndex + 1} PASSED validation ✓`);
+        // Reset retry count for next section
+        return { retryCount: 0 };
+      }
     })
     .addNode("compile", async (state) => {
       // Compile all sections into final article
@@ -153,7 +289,21 @@ export function createWriterAgent() {
         {
           role: "system",
           content:
-            "Review this article for consistency, flow, and polish. Make minor edits to improve readability while preserving the content and links. STRICTLY REMOVE ALL EM DASHES (—) if found, replacing them with commas, parentheses, or periods. Do not introduce new em dashes.",
+            "You are a copy editor performing a final polish pass. Your job is to EDIT, not ADD.\n\n" +
+            "ALLOWED CHANGES:\n" +
+            "• Fix grammar, spelling, and punctuation errors\n" +
+            "• Improve sentence flow and transitions\n" +
+            "• Replace em dashes (—) with commas, periods, or colons\n" +
+            "• Ensure consistency in tone and style\n" +
+            "• Fix awkward phrasing\n\n" +
+            "FORBIDDEN CHANGES:\n" +
+            "✗ DO NOT add new sentences or paragraphs\n" +
+            "✗ DO NOT expand on existing content\n" +
+            "✗ DO NOT add new examples or data points\n" +
+            "✗ DO NOT introduce new em dashes\n" +
+            "✗ DO NOT increase the word count\n\n" +
+            "If anything, you should REDUCE word count by tightening prose, not increase it.\n" +
+            "Preserve all links exactly as written. Return the polished article.",
         },
         { role: "user", content: state.fullArticle },
       ]);
@@ -162,6 +312,29 @@ export function createWriterAgent() {
           ? response.content
           : JSON.stringify(response.content);
       return { fullArticle: content };
+    })
+    .addNode("cleanup", async (state) => {
+      // FORCIBLE cleanup step - programmatically remove em dashes
+      // This is a failsafe in case the model didn't comply
+      let cleaned = state.fullArticle;
+
+      // Remove all em dashes (—) and replace with appropriate alternatives
+      // Common patterns where em dashes appear:
+      // 1. "word—word" -> "word, word" or "word. Word"
+      // 2. "word — word" -> "word, word"
+      // 3. " — " -> ", "
+      cleaned = cleaned.replace(/\s*—\s*/g, ", ");
+
+      // Also check for the unicode em dash character
+      cleaned = cleaned.replace(/\s*\u2014\s*/g, ", ");
+
+      // Check for HTML entity version
+      cleaned = cleaned.replace(/&mdash;/g, ", ");
+      cleaned = cleaned.replace(/&#8212;/g, ", ");
+
+      console.log(`[Writer Agent] Cleanup: Removed em dashes from article`);
+
+      return { fullArticle: cleaned };
     })
     .addNode("generateAssets", async (state) => {
       // Generate cover image
@@ -188,8 +361,8 @@ export function createWriterAgent() {
         const imageResult = await generateImage(
           prompt,
           "16:9",
-          "gpt-image-1-mini",
-          "high"
+          "gpt-image-1.5",
+          "medium"
         );
 
         if (imageResult.success && imageResult.image) {
@@ -200,14 +373,22 @@ export function createWriterAgent() {
       }
       return {};
     })
-    .addConditionalEdges("writeSection", (state) => {
+    .addEdge("__start__", "writeSection") // Set entry point
+    .addEdge("writeSection", "validateSection")
+    .addConditionalEdges("validateSection", (state) => {
+      // If validation triggered a retry (sections array was reduced), go back to writeSection
+      if (state.retryCount > 0 && state.sections.length < state.currentSection) {
+        return "writeSection";
+      }
+      // Otherwise, check if we need to write more sections
       if (state.currentSection < state.outline.sections.length) {
-        return "writeSection"; // continue writing sections
+        return "writeSection";
       }
       return "compile";
     })
     .addEdge("compile", "polish")
-    .addEdge("polish", "generateAssets");
+    .addEdge("polish", "cleanup")
+    .addEdge("cleanup", "generateAssets");
 
   return graph.compile();
 }

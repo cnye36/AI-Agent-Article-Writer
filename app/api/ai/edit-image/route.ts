@@ -8,8 +8,8 @@ export async function POST(req: NextRequest) {
     const {
       prompt, // The user's edit instruction (e.g., "remove the cat")
       originalPrompt, // The original prompt that generated the image
-      model = "gpt-image-1-mini",
-      quality = "high",
+      model = "gpt-image-1.5",
+      quality = "medium",
     } = await req.json();
 
     if (!prompt || !originalPrompt) {

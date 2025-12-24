@@ -69,8 +69,8 @@ export function AIAssistantPanel({
   onRunEditor,
   isRunningEditor = false,
   articleId,
-  imageModel = "gpt-image-1-mini",
-  imageQuality = "high",
+  imageModel = "gpt-image-1.5",
+  imageQuality = "medium",
 }: // onImageModelChange and onImageQualityChange are intentionally omitted
 // as the image settings UI has been moved to the settings modal
 AIAssistantPanelProps) {

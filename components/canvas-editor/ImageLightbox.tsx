@@ -33,8 +33,8 @@ export function ImageLightbox({
   onNavigate,
   onEditImage,
   articleId,
-  imageModel = "gpt-image-1-mini",
-  imageQuality = "high",
+  imageModel = "gpt-image-1.5",
+  imageQuality = "medium",
   isGeneratingImage = false,
 }: ImageLightboxProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -99,7 +99,7 @@ export function ImageLightbox({
       }
     } catch (error) {
       console.error("Failed to edit image:", error);
-      alert("Failed to edit image. Please try again.");
+      // Error handling is done by parent component via toast
     } finally {
       setIsGenerating(false);
     }

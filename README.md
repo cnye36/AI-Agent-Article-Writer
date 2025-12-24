@@ -91,6 +91,11 @@ A powerful AI-powered content creation platform that helps you research, outline
    STRIPE_PRICE_ID=price_your_plan
    # Optional: where to send users after closing the billing portal
    STRIPE_BILLING_PORTAL_RETURN_URL=http://localhost:3000/dashboard
+   # Required for webhook signature verification (get from Stripe Dashboard after creating webhook)
+   STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+   
+   # Supabase Service Role (required for webhook operations)
+   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
    
    # Optional: For web search in research agent
    TAVILY_API_KEY=your_tavily_api_key
@@ -108,6 +113,86 @@ A powerful AI-powered content creation platform that helps you research, outline
 6. **Open your browser**
    
    Navigate to [http://localhost:3000](http://localhost:3000)
+
+---
+
+## 💳 Stripe Webhook Setup
+
+The application uses Stripe webhooks to automatically sync subscription status and handle payment events. Follow these steps to configure webhooks:
+
+### 1. Create Products and Prices in Stripe
+
+1. Go to [Stripe Dashboard](https://dashboard.stripe.com) → Products
+2. Create a new product for your subscription plan
+3. Add a price (recurring subscription)
+4. Copy the **Price ID** (starts with `price_...`) and add it to `STRIPE_PRICE_ID` in your `.env.local`
+
+**Note:** You can use the same Stripe account for multiple apps. Just create separate products/prices for each app.
+
+### 2. Set Up Webhook Endpoint
+
+#### For Production:
+
+1. Navigate to [Stripe Dashboard](https://dashboard.stripe.com) → Developers → Webhooks
+2. Click **"Add endpoint"**
+3. Set the endpoint URL to: `https://yourdomain.com/api/billing/webhook`
+4. Select the following events to listen for:
+   - `checkout.session.completed`
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `invoice.payment_succeeded`
+   - `invoice.payment_failed`
+5. Click **"Add endpoint"**
+6. Copy the **Signing secret** (starts with `whsec_...`)
+7. Add it to your `.env.local` as `STRIPE_WEBHOOK_SECRET`
+
+#### For Local Development:
+
+Use the Stripe CLI to forward webhooks to your local server:
+
+```bash
+# Install Stripe CLI if needed
+# macOS: brew install stripe/stripe-cli/stripe
+# Windows: scoop install stripe
+
+# Login to Stripe
+stripe login
+
+# Forward webhooks to local server
+stripe listen --forward-to localhost:3000/api/billing/webhook
+```
+
+The CLI will output a webhook signing secret (starts with `whsec_...`). Use this in your `.env.local` for local development.
+
+### 3. Get Supabase Service Role Key
+
+The webhook handler needs the Supabase service role key to update user metadata:
+
+1. Go to [Supabase Dashboard](https://app.supabase.com) → Your Project → Settings → API
+2. Find the **Service Role Key** (⚠️ Keep this secret - it bypasses RLS!)
+3. Add it to your `.env.local` as `SUPABASE_SERVICE_ROLE_KEY`
+
+### 4. Test the Webhook
+
+1. Create a test subscription via your app
+2. Check the Stripe Dashboard → Webhooks → Your endpoint → Recent events
+3. Verify that events are being received (green checkmarks)
+4. Check your application logs to confirm events are processed
+5. Verify user metadata is updated in Supabase (check user's `user_metadata` field)
+
+### Webhook Event Flow
+
+When a subscription event occurs:
+
+1. Stripe sends a webhook to `/api/billing/webhook`
+2. The endpoint verifies the webhook signature for security
+3. User metadata is updated in Supabase Auth with:
+   - `subscription_status` - Current subscription status (active, cancelled, etc.)
+   - `stripe_customer_id` - Stripe customer ID
+   - `stripe_subscription_id` - Stripe subscription ID
+   - `plan` - Plan name from price metadata
+4. Frontend reads these values from user metadata to display subscription status
 
 ---
 

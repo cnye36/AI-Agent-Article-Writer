@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { createHmac, timingSafeEqual } from "crypto";
 
 const STRIPE_API_BASE = "https://api.stripe.com/v1";
 const STRIPE_API_VERSION = "2024-06-20";
@@ -58,6 +59,14 @@ async function stripeRequest<T>(
   } = {}
 ): Promise<T> {
   const secretKey = getStripeSecretKey();
+
+  // Validate API key format
+  if (!secretKey.startsWith("sk_test_") && !secretKey.startsWith("sk_live_")) {
+    throw new StripeConfigError(
+      "Invalid Stripe API key format. Must start with 'sk_test_' or 'sk_live_'"
+    );
+  }
+
   const headers: Record<string, string> = {
     Authorization: `Bearer ${secretKey}`,
     "Stripe-Version": STRIPE_API_VERSION,
@@ -74,13 +83,24 @@ async function stripeRequest<T>(
   });
 
   const data = (await response.json()) as unknown;
-  const errorPayload = data as { error?: { message?: string } };
+  const errorPayload = data as {
+    error?: { message?: string; type?: string; code?: string };
+  };
 
   if (!response.ok) {
-    const error = new StripeApiError(
+    // Log detailed error information
+    console.error("Stripe API error:", {
+      status: response.status,
+      statusText: response.statusText,
+      path,
+      error: errorPayload?.error,
+    });
+
+    const errorMessage =
       errorPayload?.error?.message ||
-        `Stripe request failed with status ${response.status}`
-    );
+      `Stripe request failed with status ${response.status}`;
+
+    const error = new StripeApiError(errorMessage);
     error.status = response.status;
     throw error;
   }
@@ -102,9 +122,12 @@ async function findCustomer(user: User): Promise<StripeCustomer | null> {
       return byMetadata.data[0];
     }
   } catch (error) {
-    console.warn("Stripe metadata search failed, falling back to email lookup", {
-      error,
-    });
+    console.warn(
+      "Stripe metadata search failed, falling back to email lookup",
+      {
+        error,
+      }
+    );
   }
 
   if (user.email) {
@@ -167,28 +190,65 @@ function getBillingPortalReturnUrl(origin: string) {
   );
 }
 
-export async function createCheckoutSession(user: User, origin: string) {
-  const priceId = process.env.STRIPE_PRICE_ID;
+/**
+ * Create a Stripe checkout session
+ * @param options - Either a User object (for authenticated users) or an email string (for new users)
+ * @param origin - The origin URL for redirects
+ * @param priceId - The Stripe price ID for the subscription
+ */
+export async function createCheckoutSession(
+  options: User | { email: string },
+  origin: string,
+  priceId?: string
+): Promise<string> {
+  // Use provided priceId or fall back to environment variable for backward compatibility
+  const finalPriceId = priceId || process.env.STRIPE_PRICE_ID;
 
-  if (!priceId) {
+  if (!finalPriceId) {
     throw new StripeConfigError(
-      "Missing STRIPE_PRICE_ID. Set it in your environment to enable upgrades."
+      "Missing price ID. Provide a priceId parameter or set STRIPE_PRICE_ID in your environment."
     );
   }
 
-  const customerId = await getOrCreateCustomerId(user);
-  const body = buildFormBody({
+  // Check if we have a User object or just an email
+  const isUser = "id" in options && "email" in options;
+  const user = isUser ? (options as User) : null;
+  const email = isUser
+    ? (options as User).email
+    : (options as { email: string }).email;
+
+  if (!email) {
+    throw new StripeConfigError("Email is required for checkout session");
+  }
+
+  // Build form body parameters
+  const formParams: Record<string, string | number | null | undefined> = {
     mode: "subscription",
-    customer: customerId,
-    client_reference_id: user.id,
-    success_url: `${origin}/dashboard?billing=success`,
+    success_url: user
+      ? `${origin}/dashboard?billing=success`
+      : `${origin}/auth/signup?email=${encodeURIComponent(
+          email
+        )}&billing=success`,
     cancel_url: `${origin}/dashboard?billing=cancelled`,
-    "line_items[0][price]": priceId,
+    "line_items[0][price]": finalPriceId,
     "line_items[0][quantity]": "1",
-    "subscription_data[metadata][supabase_user_id]": user.id,
-    "metadata[supabase_user_id]": user.id,
-    customer_email: user.email ?? undefined,
-  });
+    "subscription_data[trial_period_days]": "14",
+    customer_email: email,
+  };
+
+  // If we have a user, link the customer and add user ID to metadata
+  if (user) {
+    const customerId = await getOrCreateCustomerId(user);
+    formParams.customer = customerId;
+    formParams.client_reference_id = user.id;
+    formParams["subscription_data[metadata][supabase_user_id]"] = user.id;
+    formParams["metadata[supabase_user_id]"] = user.id;
+  } else {
+    // For new users, store email in metadata so we can link it after account creation
+    formParams["metadata[checkout_email]"] = email;
+  }
+
+  const body = buildFormBody(formParams);
 
   const session = await stripeRequest<StripeCheckoutSession>(
     "/checkout/sessions",
@@ -226,4 +286,64 @@ export async function createBillingPortalSession(
   }
 
   return portalSession.url;
+}
+
+/**
+ * Verifies the Stripe webhook signature to ensure the request is authentic.
+ * @param payload - The raw request body as a string
+ * @param signature - The stripe-signature header value
+ * @param secret - The webhook signing secret from Stripe
+ * @returns true if signature is valid, throws error if invalid
+ */
+export function verifyWebhookSignature(
+  payload: string,
+  signature: string,
+  secret: string
+): boolean {
+  const elements = signature.split(",");
+  const signatureHash = elements
+    .find((element) => element.startsWith("v1="))
+    ?.split("=")[1];
+
+  if (!signatureHash) {
+    throw new Error("Unable to extract signature hash from header");
+  }
+
+  // Extract timestamp
+  const timestamp = elements
+    .find((element) => element.startsWith("t="))
+    ?.split("=")[1];
+  if (!timestamp) {
+    throw new Error("Unable to extract timestamp from header");
+  }
+
+  // Reconstruct the signed payload
+  const signedPayload = `${timestamp}.${payload}`;
+
+  // Compute the expected signature
+  const expectedSignature = createHmac("sha256", secret)
+    .update(signedPayload, "utf8")
+    .digest("hex");
+
+  // Compare signatures using timing-safe comparison
+  const expectedBuffer = Buffer.from(expectedSignature, "hex");
+  const receivedBuffer = Buffer.from(signatureHash, "hex");
+
+  if (expectedBuffer.length !== receivedBuffer.length) {
+    throw new Error("Invalid signature length");
+  }
+
+  if (!timingSafeEqual(expectedBuffer, receivedBuffer)) {
+    throw new Error("Invalid webhook signature");
+  }
+
+  // Optional: Check timestamp to prevent replay attacks (recommended: 5 minutes)
+  const timestampMs = parseInt(timestamp, 10) * 1000;
+  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+
+  if (timestampMs < fiveMinutesAgo) {
+    throw new Error("Webhook timestamp too old");
+  }
+
+  return true;
 }

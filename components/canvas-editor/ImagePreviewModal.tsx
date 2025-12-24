@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { downloadImage, generateFilename } from "@/lib/image-utils";
+import Image from "next/image";
 
 interface ImagePreviewModalProps {
   src: string;
@@ -149,7 +149,7 @@ export function ImagePreviewModal({
 
         {/* Image container */}
         <div
-          className="relative max-w-full max-h-full flex items-center justify-center"
+          className="relative w-full h-full max-w-full max-h-[90vh] flex items-center justify-center"
           onClick={(e) => e.stopPropagation()}
         >
           {isEditingState ? (
@@ -157,28 +157,15 @@ export function ImagePreviewModal({
               <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
               <p>Generating new version...</p>
             </div>
-          ) : src.startsWith("data:") ? (
-            // Use regular img tag for data URLs as Next.js Image can have issues
+          ) : src ? (
+            // Use regular img tag for both data URLs and regular URLs for better compatibility
             <Image
               src={src}
               alt={alt}
               fill
               className="object-contain rounded-lg shadow-2xl"
-              unoptimized
-              sizes="(max-width: 1280px) 100vw, 1280px"
             />
-          ) : (
-            <div className="relative w-full h-full max-w-full max-h-[90vh]">
-              <Image
-                src={src}
-                alt={alt}
-                fill
-                className="object-contain rounded-lg shadow-2xl"
-                unoptimized
-                sizes="(max-width: 1280px) 100vw, 1280px"
-              />
-            </div>
-          )}
+          ) : null}
         </div>
 
         {/* Image info / Edit Form */}

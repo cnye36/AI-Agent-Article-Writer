@@ -98,7 +98,8 @@ export default function PricingPage() {
             </span>
           </h1>
           <p className="text-xl text-zinc-400 max-w-2xl mx-auto mb-8">
-            Start with a 14-day free trial. No credit card required. Scale as you grow.
+            Start with a 14-day free trial. Credit card required. Scale as you
+            grow.
           </p>
         </div>
       </section>
@@ -114,7 +115,7 @@ export default function PricingPage() {
               Compare All Features
             </h2>
             <p className="text-zinc-400">
-              See exactly what's included in each plan
+              See exactly what&apos;s included in each plan
             </p>
           </div>
 
@@ -122,9 +123,15 @@ export default function PricingPage() {
             {/* Table header */}
             <div className="grid grid-cols-4 gap-4 p-6 border-b border-zinc-800 bg-zinc-900/50">
               <div className="text-white font-semibold">Features</div>
-              <div className="text-white font-semibold text-center">Starter</div>
-              <div className="text-white font-semibold text-center">Professional</div>
-              <div className="text-white font-semibold text-center">Enterprise</div>
+              <div className="text-white font-semibold text-center">
+                Starter
+              </div>
+              <div className="text-white font-semibold text-center">
+                Professional
+              </div>
+              <div className="text-white font-semibold text-center">
+                Enterprise
+              </div>
             </div>
 
             {/* Feature rows */}
@@ -149,7 +156,9 @@ export default function PricingPage() {
                           <X className="w-5 h-5 text-zinc-600 mx-auto" />
                         )
                       ) : (
-                        <span className="text-zinc-300 text-sm">{feature.starter}</span>
+                        <span className="text-zinc-300 text-sm">
+                          {feature.starter}
+                        </span>
                       )}
                     </div>
                     <div className="text-center">
@@ -160,7 +169,9 @@ export default function PricingPage() {
                           <X className="w-5 h-5 text-zinc-600 mx-auto" />
                         )
                       ) : (
-                        <span className="text-zinc-300 text-sm">{feature.pro}</span>
+                        <span className="text-zinc-300 text-sm">
+                          {feature.pro}
+                        </span>
                       )}
                     </div>
                     <div className="text-center">
@@ -171,7 +182,9 @@ export default function PricingPage() {
                           <X className="w-5 h-5 text-zinc-600 mx-auto" />
                         )
                       ) : (
-                        <span className="text-zinc-300 text-sm">{feature.enterprise}</span>
+                        <span className="text-zinc-300 text-sm">
+                          {feature.enterprise}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -189,16 +202,14 @@ export default function PricingPage() {
             <h2 className="text-4xl font-bold text-white mb-4">
               Frequently Asked Questions
             </h2>
-            <p className="text-zinc-400">
-              Have questions? We have answers.
-            </p>
+            <p className="text-zinc-400">Have questions? We have answers.</p>
           </div>
 
           <div className="space-y-6">
             {[
               {
                 q: "How does the free trial work?",
-                a: "Start with any plan and get 14 days completely free. No credit card required. You can cancel anytime during the trial period.",
+                a: "Start with any plan and get 14 days completely free. Credit card required. You'll be charged at the end of the trial period if you don't cancel. You can cancel anytime during the trial period.",
               },
               {
                 q: "Can I change plans later?",

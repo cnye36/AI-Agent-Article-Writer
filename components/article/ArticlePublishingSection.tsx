@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { cn, formatDate } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Article, PublishingSite, ArticlePublication } from "@/types";
 
 interface ArticlePublishingSectionProps {
@@ -24,6 +26,8 @@ export function ArticlePublishingSection({
   const [publicationSlug, setPublicationSlug] = useState("");
   const [isEditingDate, setIsEditingDate] = useState(false);
   const [customPublishDate, setCustomPublishDate] = useState("");
+  const { showToast } = useToast();
+  const { confirm } = useConfirmDialog();
 
   // Fetch sites and publications
   useEffect(() => {
@@ -81,8 +85,12 @@ export function ArticlePublishingSection({
   };
 
   const handleDeleteSite = async (siteId: string) => {
-    if (!confirm("Delete this publishing site? This will also remove all publications to this site."))
-      return;
+    const confirmed = await confirm({
+      message: "Delete this publishing site? This will also remove all publications to this site.",
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/publishing-sites?id=${siteId}`, {
@@ -100,7 +108,7 @@ export function ArticlePublishingSection({
 
   const handlePublishToSite = async (siteId: string) => {
     if (!publicationSlug.trim()) {
-      alert("Please enter a slug");
+      showToast("Please enter a slug", "warning");
       return;
     }
 
@@ -131,7 +139,12 @@ export function ArticlePublishingSection({
   };
 
   const handleUnpublish = async (publicationId: string) => {
-    if (!confirm("Remove this publication?")) return;
+    const confirmed = await confirm({
+      message: "Remove this publication?",
+      variant: "danger",
+      confirmText: "Remove",
+    });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/articles/publications?id=${publicationId}`, {
@@ -148,23 +161,24 @@ export function ArticlePublishingSection({
 
   const handleUpdatePublishDate = () => {
     if (!customPublishDate) {
-      alert("Please enter a valid date");
+      showToast("Please enter a valid date", "warning");
       return;
     }
 
     try {
       const dateObj = new Date(customPublishDate);
       if (isNaN(dateObj.getTime())) {
-        alert("Invalid date format");
+        showToast("Invalid date format", "error");
         return;
       }
 
       onUpdate({ published_at: dateObj.toISOString() });
       setIsEditingDate(false);
       setCustomPublishDate("");
+      showToast("Publish date updated", "success");
     } catch (error) {
       console.error("Error updating publish date:", error);
-      alert("Failed to update publish date");
+      showToast("Failed to update publish date", "error");
     }
   };
 

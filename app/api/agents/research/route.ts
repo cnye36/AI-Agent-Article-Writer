@@ -19,15 +19,49 @@ const ResearchRequestSchema = z.object({
     "personal",
   ]).optional(),
   maxTopics: z.number().min(1).max(20).default(5),
+  // NEW FIELDS for prompt mode
+  mode: z.enum(["discover", "direct", "prompt"]).default("discover"),
+  promptInput: z.string().optional(),
+  useSearchInPrompt: z.boolean().default(false),
 }).refine(
-  (data) => data.industry || (data.keywords && data.keywords.length > 0),
+  (data) => {
+    // Discover/direct: need industry OR keywords
+    if (data.mode === "discover" || data.mode === "direct") {
+      return data.industry || (data.keywords && data.keywords.length > 0);
+    }
+    // Prompt mode: need promptInput
+    if (data.mode === "prompt") {
+      return data.promptInput && data.promptInput.trim().length > 0;
+    }
+    return false;
+  },
   {
-    message: "Either industry or keywords must be provided",
+    message: "For discover/direct mode: provide industry or keywords. For prompt mode: provide promptInput.",
   }
 );
 
 // Industry keyword mappings for enhanced search
 import { INDUSTRY_KEYWORDS, INDUSTRY_NAMES } from "@/lib/config";
+
+// Helper function to extract keywords from prompt input
+function extractKeywordsFromPrompt(prompt: string): string[] {
+  // Simple extraction: take first 50 words, remove common words, return top keywords
+  const words = prompt
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter(w => w.length > 3);
+
+  const stopWords = new Set([
+    "this", "that", "with", "from", "have", "what", "when", "where",
+    "which", "want", "need", "would", "could", "should", "will", "about",
+    "article", "write", "writing", "looking", "create", "want"
+  ]);
+  const keywords = words.filter(w => !stopWords.has(w));
+
+  // Return first 6 unique keywords
+  return Array.from(new Set(keywords)).slice(0, 6);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,23 +88,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { industry, keywords, articleType } = validationResult.data;
+    const {
+      industry,
+      keywords,
+      articleType,
+      mode,
+      promptInput,
+      useSearchInPrompt
+    } = validationResult.data;
 
-    // Get industry keywords, merge with custom keywords
-    // If only industry is provided, use industry keywords
-    // If only keywords are provided, use those
-    // If both are provided, merge them (user keywords take precedence in ordering)
-    const industryKeywords = industry ? (INDUSTRY_KEYWORDS[industry] || []) : [];
-    const userKeywords = keywords || [];
-    
-    // Merge: user keywords first (more specific), then industry keywords
-    // Use Set to deduplicate while preserving order
-    const searchKeywords = [...new Set([...userKeywords, ...industryKeywords])];
-    // Speed guardrail: don't send huge keyword lists into the search step
+    // Determine keywords based on mode
+    let searchKeywords: string[] = [];
+
+    if (mode === "prompt" && useSearchInPrompt && promptInput) {
+      // Extract keywords from prompt input for search
+      searchKeywords = extractKeywordsFromPrompt(promptInput);
+    } else if (mode === "discover" || mode === "direct") {
+      const industryKeywords = industry ? (INDUSTRY_KEYWORDS[industry] || []) : [];
+      const userKeywords = keywords || [];
+      // Merge: user keywords first (more specific), then industry keywords
+      searchKeywords = [...new Set([...userKeywords, ...industryKeywords])];
+    }
+    // For prompt mode without search, keywords can be empty
+
     const searchKeywordsForAgent = searchKeywords.slice(0, 6);
-    
-    // Ensure we have at least some keywords to search with
-    if (searchKeywords.length === 0) {
+
+    // Validation: ensure we have what we need for the selected mode
+    if ((mode === "discover" || mode === "direct") && searchKeywords.length === 0) {
       return NextResponse.json(
         { error: "No search keywords available. Please provide keywords or select an industry." },
         { status: 400 }
@@ -88,6 +132,9 @@ export async function POST(request: NextRequest) {
       keywords: searchKeywordsForAgent,
       articleType,
       existingTopics: allExistingTopics,
+      mode: mode,
+      promptInput: promptInput,
+      useSearchInPrompt: useSearchInPrompt || false,
     });
 
     // Get or create industry record (use default "tech" if no industry provided)
@@ -150,10 +197,13 @@ export async function POST(request: NextRequest) {
       metadata: {
         angle: topic.angle,
         hook: topic.hook, // Save the hook for use in outline/article generation
+        category: topic.category, // NEW: Category for diversity tracking
+        rationale: topic.rationale, // NEW: Rationale (prompt mode only)
         discoveredAt: new Date().toISOString(),
         searchKeywords: searchKeywords.slice(0, 5),
         similarTopics: topic.similarTopics, // Store similar topics for reference
         articleType: articleType, // Store the article type used for this topic
+        mode: mode, // NEW: Track which mode generated this
         temporary: true, // Mark as temporary until saved
         // Store full topic data for saving later
         _topicData: {
@@ -165,6 +215,8 @@ export async function POST(request: NextRequest) {
           embedding: topic.embedding,
           angle: topic.angle,
           hook: topic.hook,
+          category: topic.category,
+          rationale: topic.rationale,
         },
       },
     }));
@@ -179,6 +231,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         industry: industryForDb,
         industryId: industryId, // Include industry ID for saving later
+        mode: mode, // NEW: Return mode used
         keywordsUsed: searchKeywordsForAgent.slice(0, 10),
         existingArticlesChecked: 0, // We now use vector search for deduplication
         topicsDiscovered: topicsWithTempIds.length,

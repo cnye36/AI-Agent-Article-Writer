@@ -115,6 +115,7 @@ export const ImageWithRemove = Image.extend({
       const removeButton = document.createElement("button");
       removeButton.className = "absolute top-2 right-2 z-10 p-1.5 bg-red-600 hover:bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-lg cursor-pointer";
       removeButton.setAttribute("aria-label", "Remove from canvas");
+      removeButton.setAttribute("data-image-remove-button", "true");
       removeButton.innerHTML = `
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -123,10 +124,17 @@ export const ImageWithRemove = Image.extend({
       removeButton.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         const pos = typeof getPos === "function" ? getPos() : null;
         if (pos !== null && pos !== undefined) {
           editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run();
         }
+      };
+      // Also handle on mousedown to catch it earlier
+      removeButton.onmousedown = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
       };
       
       imageWrapper.appendChild(img);

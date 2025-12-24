@@ -234,7 +234,7 @@ export function HeroSection() {
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
             <Link
-              href="/auth/signup"
+              href="/#pricing"
               className="group inline-flex items-center justify-center gap-2 px-8 py-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-all hover:scale-105 shadow-lg shadow-blue-500/25"
             >
               Start Writing for Free
@@ -250,7 +250,7 @@ export function HeroSection() {
 
           {/* Trust indicators */}
           <p className="text-sm text-zinc-500 dark:text-zinc-500 pt-4">
-            No credit card required • Free trial • Cancel anytime
+            14-day free trial • Credit card required • Cancel anytime
           </p>
         </div>
 

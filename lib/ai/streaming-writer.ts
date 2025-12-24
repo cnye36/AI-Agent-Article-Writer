@@ -40,25 +40,33 @@ export async function* streamWriteSection(
 ): AsyncGenerator<string, StreamingSectionResult> {
   const previousContext = context.previousSections.slice(-2).join("\n\n");
 
+  const minWords = Math.floor(section.wordTarget * 0.9);
+  const maxWords = Math.ceil(section.wordTarget * 1.1);
+
   const systemPrompt = `You are an expert content writer with deep expertise across multiple industries.
 
-Writing Guidelines:
-1. Match the tone and style to the article type (${context.articleType})
-2. Use the outline as your structure - don't deviate
-3. Incorporate sources naturally with proper attribution
-4. Include internal links ONLY from the provided AllowedInternalLinks list - DO NOT invent URLs or slugs
-5. Add at least 2 external links from the provided Sources list
-6. Write engaging, scannable content with varied sentence structure
-7. Use concrete examples and data points
-8. Avoid fluff - every sentence should add value
-9. STRICTLY FORBIDDEN: Do not use em dashes (—). Use commas, parentheses, or colons instead.
+╔═══════════════════════════════════════════════════════════════════╗
+║                       PRIMARY DIRECTIVE                           ║
+║                   WORD COUNT IS MANDATORY                         ║
+╠═══════════════════════════════════════════════════════════════════╣
+║ TARGET: ${section.wordTarget} words (STRICT: ${minWords}-${maxWords} words)              ║
+║                                                                   ║
+║ This section MUST be between ${minWords}-${maxWords} words.                    ║
+║ Failure to meet this requirement = REJECTION.                    ║
+║                                                                   ║
+║ Count your words as you write. Be concise and value-driven.      ║
+╚═══════════════════════════════════════════════════════════════════╝
 
-Tone: ${context.tone}
+SECONDARY DIRECTIVES:
+1. Match tone (${context.tone}) and article type (${context.articleType})
+2. Follow outline structure exactly
+3. Include 2+ external links from provided Sources
+4. Internal links ONLY from AllowedInternalLinks list
+5. NO em dashes (—) - use commas, parentheses, or colons
+6. Use concrete examples and data points
+7. Make content scannable and engaging
 
-You're writing section ${context.sectionIndex + 1} of ${
-    context.totalSections
-  } for the article "${context.articleTitle}".
-Follow the key points in the outline, hit the word target (approximately), and transition smoothly from the previous section.`;
+You're writing section ${context.sectionIndex + 1} of ${context.totalSections} for "${context.articleTitle}".`;
 
   const customInstructionsText = context.customInstructions?.trim()
     ? `\n\nCustom Instructions (MUST follow):\n${context.customInstructions.trim()}`
@@ -91,20 +99,19 @@ Follow the key points in the outline, hit the word target (approximately), and t
 
 Heading: ${section.heading}
 Key Points: ${section.keyPoints.join(", ")}
-Word Target: ${
-    section.wordTarget
-  } words${allowedInternalLinksText}${sourcesText}
+**MANDATORY Word Count: ${section.wordTarget} words (STRICT: ${minWords}-${maxWords} words)**${allowedInternalLinksText}${sourcesText}
 ${customInstructionsText}
 
-CRITICAL REQUIREMENTS:
-- Add at least 2 external links using URLs from the Sources list above
-- Only use internal links from the AllowedInternalLinks list (if any)
-- Do not invent or create any links that are not explicitly provided
-- Use markdown format: [link text](URL)
+CRITICAL REQUIREMENTS (FAILURE = REJECTION):
+✓ WORD COUNT: MUST be ${minWords}-${maxWords} words. Count carefully as you write.
+✓ NO EM DASHES: Absolutely forbidden. Use commas, periods, or colons.
+✓ EXTERNAL LINKS: Add 2+ links using URLs from Sources list
+✓ INTERNAL LINKS: Only use links from AllowedInternalLinks (if provided)
+✓ FORMAT: Use markdown [text](URL)
 
-Write the complete section content now. Start with the heading as a markdown heading (## ${
+Write the complete section content now. Start with the heading (## ${
     section.heading
-  }), then write the content.`;
+  }), then write concise, value-driven content that STAYS WITHIN THE WORD COUNT.`;
 
   let fullContent = "";
   let tokenCount = 0;
@@ -166,16 +173,20 @@ export async function* streamWriteHook(
   tone: string,
   customInstructions?: string
 ): AsyncGenerator<string, string> {
-  const systemPrompt = `You are an expert content writer. Write an engaging article introduction that hooks the reader.
+  const systemPrompt = `You are an expert content writer. Write an engaging, CONCISE article introduction.
+
+**MANDATORY: 50-100 words MAXIMUM** (strict limit)
 
 Tone: ${tone}
 Article Type: ${articleType}
 
-The hook should be 2-3 paragraphs that:
+The hook should be 2-3 SHORT paragraphs that:
 1. Grab attention immediately
-2. Establish relevance and context
-3. Hint at what the article will cover
-4. Make the reader want to continue`;
+2. Establish relevance
+3. Hint at what's covered
+4. Make reader want to continue
+
+BE CONCISE. Every word must count. Do NOT exceed 100 words.`;
 
   const customInstructionsText = customInstructions?.trim()
     ? `\n\nCustom Instructions (MUST follow):\n${customInstructions.trim()}`
@@ -187,7 +198,9 @@ Title: ${title}
 Hook Brief: ${hook}
 ${customInstructionsText}
 
-Write the complete introduction now. DO NOT include the title - just the hook paragraphs.`;
+**CRITICAL: 50-100 words MAXIMUM. Be concise and impactful.**
+
+Write the complete introduction now. DO NOT include the title - just 2-3 short hook paragraphs.`;
 
   let fullContent = "";
 
@@ -231,16 +244,20 @@ export async function* streamWriteConclusion(
   fullArticleSoFar: string,
   customInstructions?: string
 ): AsyncGenerator<string, string> {
-  const systemPrompt = `You are an expert content writer. Write a compelling article conclusion.
+  const systemPrompt = `You are an expert content writer. Write a compelling, CONCISE article conclusion.
+
+**MANDATORY: 100-150 words MAXIMUM** (strict limit)
 
 Tone: ${tone}
 Article Type: ${articleType}
 
 The conclusion should:
-1. Summarize the key points without being repetitive
+1. Summarize key points (briefly, no repetition)
 2. Provide actionable next steps
-3. End with a strong call-to-action
-4. Leave the reader feeling informed and motivated`;
+3. End with strong call-to-action
+4. Leave reader informed and motivated
+
+BE CONCISE. Do NOT exceed 150 words.`;
 
   const customInstructionsText = customInstructions?.trim()
     ? `\n\nCustom Instructions (MUST follow):\n${customInstructions.trim()}`
@@ -256,7 +273,9 @@ ${customInstructionsText}
 Article content so far:
 ${fullArticleSoFar.substring(0, 1000)}... [truncated]
 
-Write the complete conclusion section now. Start with "## Conclusion" as the heading.`;
+**CRITICAL: 100-150 words MAXIMUM. Be concise and impactful.**
+
+Write the complete conclusion now. Start with "## Conclusion" as the heading, then write 2-3 short paragraphs.`;
 
   let fullContent = "";
 

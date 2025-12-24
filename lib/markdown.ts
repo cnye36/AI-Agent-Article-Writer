@@ -29,6 +29,163 @@ export function removeFirstH1(doc: JSONContent): JSONContent {
 }
 
 /**
+ * Clean markdown content by removing base64 data URLs and prompt text that shouldn't be in the content
+ * This function removes lines containing base64 image data that may have been accidentally saved as text
+ */
+export function cleanMarkdown(markdown: string): string {
+  if (!markdown || typeof markdown !== "string") {
+    return markdown;
+  }
+  
+  // First, remove any base64 data URLs that span multiple lines
+  // Base64 data URLs can be extremely long (thousands of characters)
+  // Use a regex to remove the entire pattern: data:image/<type>;base64,<very_long_base64_string>
+  markdown = markdown.replace(/data:image\/[^;]+;base64,[A-Za-z0-9+/=\s]{100,}/g, '');
+  
+  // Remove multi-line image generation prompt blocks
+  // Pattern: ![Image Generation Prompt: followed by multi-line content (may be malformed)
+  // Also handles ||Generate an AI art image patterns
+  // Using [\s\S] instead of . with s flag for ES2017 compatibility
+  markdown = markdown.replace(/!\[Image Generation Prompt:[^\n]*\n[\s\S]*?(?=\n\n|\n#|\n!\[[^\]]+\]\(|$)/g, '');
+  markdown = markdown.replace(/!\[Generation Prompt:[^\n]*\n[\s\S]*?(?=\n\n|\n#|\n!\[[^\]]+\]\(|$)/gi, '');
+  markdown = markdown.replace(/!\[Prompt:[^\n]*\n[\s\S]*?(?=\n\n|\n#|\n!\[[^\]]+\]\(|$)/gi, '');
+  
+  // Remove prompt blocks that start with ||Generate or |Generate
+  markdown = markdown.replace(/\|+Generate an AI art image[\s\S]*?(?=\n\n|\n#|\n!\[[^\]]+\]\(|$)/gi, '');
+  markdown = markdown.replace(/\|+Generate.*?cover[\s\S]*?(?=\n\n|\n#|\n!\[[^\]]+\]\(|$)/gi, '');
+  
+  // Now process line by line
+  const lines = markdown.split("\n");
+  const cleaned: string[] = [];
+  let inPromptBlock = false;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    const lowerTrimmed = trimmed.toLowerCase();
+    
+    // Skip empty lines that might be left after removing base64
+    if (!trimmed) {
+      if (!inPromptBlock) {
+        cleaned.push(line);
+      }
+      continue;
+    }
+    
+    // Detect start of prompt block - malformed image markdown with "Image Generation Prompt" or "Prompt:"
+    // Also detect ||Generate or |Generate patterns
+    if (trimmed.match(/^!\[(Image )?Generation Prompt:/i) || 
+        trimmed.match(/^!\[Prompt:/i) ||
+        trimmed.match(/^\|+Generate/i) ||
+        trimmed.match(/^\|+\s*Generate.*?(art|AI).*?image/i) ||
+        (trimmed.startsWith('![Image Generation Prompt') && !trimmed.includes(']('))) {
+      inPromptBlock = true;
+      continue;
+    }
+    
+    // If we're in a prompt block, check if we should continue skipping
+    if (inPromptBlock) {
+      // Check for common prompt keywords that indicate we're still in the prompt
+      const isPromptContent = 
+        lowerTrimmed.includes('text overlay') ||
+        lowerTrimmed.includes('main text:') ||
+        lowerTrimmed.includes('supporting text:') ||
+        lowerTrimmed.includes('visual style:') ||
+        lowerTrimmed.includes('design elements:') ||
+        lowerTrimmed.includes('aspect ratio:') ||
+        trimmed.match(/^Aspect Ratio:/i) ||
+        trimmed.match(/^Text Overlay:/i) ||
+        trimmed.match(/^Visual Style:/i) ||
+        trimmed.match(/^Design Elements:/i) ||
+        lowerTrimmed.includes('gradient') && lowerTrimmed.includes('blue') ||
+        lowerTrimmed.match(/^[•\-\*]\s+(use|integrate|ensure|incorporate)/i) ||
+        (trimmed.match(/^[•\-\*]/) && lowerTrimmed.includes('text') && lowerTrimmed.includes('overlay'));
+      
+      // If we hit a clear markdown element (heading, image, etc.) we've left the prompt block
+      if (trimmed.startsWith('#') || trimmed.match(/^!\[[^\]]+\]\(/)) {
+        inPromptBlock = false;
+        cleaned.push(line);
+        continue;
+      }
+      
+      // Continue skipping prompt content
+      if (isPromptContent) {
+        continue;
+      }
+      
+      // If we've gone a few lines without prompt content, exit the block
+      // Check if this looks like normal article content
+      if (trimmed.length > 0 && !isPromptContent) {
+        // Look ahead to see if there's more prompt content
+        let hasMorePrompt = false;
+        for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+          const nextLine = lines[j].trim().toLowerCase();
+          if (nextLine.includes('visual style') || nextLine.includes('design elements') || 
+              nextLine.includes('text overlay') && nextLine.includes('main text')) {
+            hasMorePrompt = true;
+            break;
+          }
+        }
+        if (!hasMorePrompt) {
+          inPromptBlock = false;
+        } else {
+          continue; // Still in prompt block
+        }
+      }
+    }
+    
+    // Skip lines that are pure base64 data URLs (data:image/*;base64,...)
+    if (trimmed.match(/^data:image\/[^;]+;base64,[A-Za-z0-9+/=]+$/)) {
+      continue;
+    }
+    
+    // Skip lines that start with base64 data URLs
+    if (trimmed.startsWith("data:image/") && trimmed.includes(";base64,")) {
+      continue;
+    }
+    
+    // Skip lines that contain very long base64 strings
+    const base64Match = trimmed.match(/data:image\/[^;]+;base64,([A-Za-z0-9+/=\s]+)/);
+    if (base64Match && base64Match[1]) {
+      const base64Data = base64Match[1].replace(/\s/g, '');
+      if (base64Data.length > 50) {
+        continue;
+      }
+    }
+    
+    // Skip lines that are just base64 characters
+    if (trimmed.length > 100 && trimmed.match(/^[A-Za-z0-9+/=\s]+$/)) {
+      const base64CharCount = (trimmed.match(/[A-Za-z0-9+/=]/g) || []).length;
+      if (base64CharCount / trimmed.length > 0.9) {
+        continue;
+      }
+    }
+    
+    // Skip lines that look like image generation prompts
+    const isPromptLine = 
+      trimmed.match(/^!\[(Image )?Generation Prompt:/i) ||
+      trimmed.match(/^!\[Prompt:/i) ||
+      (lowerTrimmed.includes('cover image') && lowerTrimmed.includes('aspect ratio') && lowerTrimmed.length > 50) ||
+      (lowerTrimmed.includes('image generation prompt') && lowerTrimmed.length > 30) ||
+      (lowerTrimmed.includes('eye-catching text overlay') && lowerTrimmed.includes('gradient')) ||
+      (lowerTrimmed.includes('dynamic and modern cover image') && lowerTrimmed.includes('16:9')) ||
+      (trimmed.match(/^[•\-\*]\s*Main Text:/i)) ||
+      (trimmed.match(/^[•\-\*]\s*Supporting Text:/i)) ||
+      (trimmed.match(/^[•\-\*]\s*Visual Style:/i)) ||
+      (trimmed.match(/^[•\-\*]\s*Design Elements:/i));
+    
+    if (isPromptLine) {
+      continue;
+    }
+    
+    // Keep all other lines
+    cleaned.push(line);
+  }
+  
+  return cleaned.join("\n");
+}
+
+/**
  * Convert TipTap JSON to Markdown
  * @param doc - TipTap JSON document or markdown string
  * @param options - Conversion options
@@ -45,7 +202,11 @@ export function tiptapToMarkdown(
       // Remove first line if it's an h1 heading
       const lines = doc.split("\n");
       const firstLine = lines[0]?.trim();
-      if (firstLine && firstLine.startsWith("# ") && !firstLine.startsWith("##")) {
+      if (
+        firstLine &&
+        firstLine.startsWith("# ") &&
+        !firstLine.startsWith("##")
+      ) {
         return lines.slice(1).join("\n").trim();
       }
     }
@@ -71,7 +232,44 @@ export function tiptapToMarkdown(
     // Text node
     if (node.type === "text") {
       let text = node.text || "";
-      
+
+      // Skip text nodes that are base64 data URLs (they shouldn't be saved as text)
+      if (
+        text.match(/^data:image\/[^;]+;base64,[A-Za-z0-9+/=]+$/) ||
+        (text.startsWith("data:image/") &&
+          text.includes(";base64,") &&
+          text.length > 100)
+      ) {
+        return ""; // Don't include base64 data URLs as text content
+      }
+
+      // Skip text that looks like image generation prompts
+      const lowerText = text.toLowerCase();
+      if (
+        text.match(/^\|+\s*Generate/i) || // ||Generate or |Generate patterns
+        text.match(/^Aspect Ratio:/i) ||
+        text.match(/^Text Overlay:/i) ||
+        text.match(/^Visual Style:/i) ||
+        text.match(/^Design Elements:/i) ||
+        (lowerText.includes("generate") &&
+          lowerText.includes("ai") &&
+          lowerText.includes("image")) ||
+        (lowerText.includes("generate") &&
+          lowerText.includes("art") &&
+          lowerText.includes("cover")) ||
+        (text.length > 100 &&
+          ((lowerText.includes("cover image") &&
+            lowerText.includes("aspect ratio") &&
+            lowerText.includes("eye-catching")) ||
+            (lowerText.includes("image generation prompt") &&
+              lowerText.includes("dynamic and modern")) ||
+            (lowerText.includes("text overlay") &&
+              lowerText.includes("gradient background") &&
+              lowerText.includes("16:9"))))
+      ) {
+        return ""; // Don't include image generation prompts as text content
+      }
+
       // Apply marks
       if (node.marks) {
         for (const mark of node.marks) {
@@ -87,7 +285,7 @@ export function tiptapToMarkdown(
           }
         }
       }
-      
+
       return text;
     }
 
@@ -104,35 +302,78 @@ export function tiptapToMarkdown(
         return `${prefix} ${content}\n\n`;
 
       case "paragraph":
+        // Skip paragraphs that contain only base64 data URLs
+        const paragraphText = content.trim();
+        if (
+          paragraphText.match(/^data:image\/[^;]+;base64,[A-Za-z0-9+/=]+$/) ||
+          (paragraphText.startsWith("data:image/") &&
+            paragraphText.includes(";base64,") &&
+            paragraphText.length > 100)
+        ) {
+          return ""; // Don't include base64 data URLs as text content
+        }
+
+        // Skip paragraphs that look like image generation prompts
+        const lowerParagraphText = paragraphText.toLowerCase();
+        if (
+          paragraphText.match(/^!\[Prompt:.*\]\(\)$/) || // ![Prompt:]() format
+          paragraphText.match(/^\|+\s*Generate/i) || // ||Generate or |Generate patterns
+          paragraphText.match(/^Aspect Ratio:/i) || // Aspect Ratio: line
+          paragraphText.match(/^Text Overlay:/i) ||
+          paragraphText.match(/^Visual Style:/i) ||
+          paragraphText.match(/^Design Elements:/i) ||
+          (lowerParagraphText.includes("generate") &&
+            lowerParagraphText.includes("ai") &&
+            lowerParagraphText.includes("image")) ||
+          (lowerParagraphText.includes("generate") &&
+            lowerParagraphText.includes("art") &&
+            lowerParagraphText.includes("cover")) ||
+          (paragraphText.length > 100 &&
+            lowerParagraphText.includes("cover image") &&
+            lowerParagraphText.includes("aspect ratio") &&
+            lowerParagraphText.includes("eye-catching")) ||
+          (lowerParagraphText.includes("image generation prompt") &&
+            lowerParagraphText.includes("dynamic and modern")) ||
+          (lowerParagraphText.includes("text overlay") &&
+            lowerParagraphText.includes("gradient background") &&
+            lowerParagraphText.includes("16:9"))
+        ) {
+          return ""; // Don't include image generation prompts as text content
+        }
+
         return `${content}\n\n`;
 
       case "bulletList":
-        return node.content
-          ?.map((item) => {
-            if (item.type === "listItem" && item.content) {
-              const itemContent = item.content
-                .map(processNode)
-                .join("")
-                .trim();
-              return `- ${itemContent}\n`;
-            }
-            return "";
-          })
-          .join("") || "";
+        return (
+          node.content
+            ?.map((item) => {
+              if (item.type === "listItem" && item.content) {
+                const itemContent = item.content
+                  .map(processNode)
+                  .join("")
+                  .trim();
+                return `- ${itemContent}\n`;
+              }
+              return "";
+            })
+            .join("") || ""
+        );
 
       case "orderedList":
-        return node.content
-          ?.map((item, index) => {
-            if (item.type === "listItem" && item.content) {
-              const itemContent = item.content
-                .map(processNode)
-                .join("")
-                .trim();
-              return `${index + 1}. ${itemContent}\n`;
-            }
-            return "";
-          })
-          .join("") || "";
+        return (
+          node.content
+            ?.map((item, index) => {
+              if (item.type === "listItem" && item.content) {
+                const itemContent = item.content
+                  .map(processNode)
+                  .join("")
+                  .trim();
+                return `${index + 1}. ${itemContent}\n`;
+              }
+              return "";
+            })
+            .join("") || ""
+        );
 
       case "blockquote":
         return `> ${content.trim().replace(/\n/g, "\n> ")}\n\n`;
@@ -152,6 +393,49 @@ export function tiptapToMarkdown(
         const alt = node.attrs?.alt || "";
         return `![${alt}](${src})\n\n`;
 
+      case "table":
+        if (!node.content || node.content.length === 0) return "";
+
+        // Process table rows
+        const rows = node.content;
+        let tableMarkdown = "";
+
+        // Helper to get cell text content
+        const getCellContent = (cell: JSONContent): string => {
+          if (!cell.content) return "";
+          return cell.content.map((c) => {
+            if (c.type === "paragraph" && c.content) {
+              return c.content.map(processNode).join("").trim();
+            }
+            return processNode(c).trim();
+          }).join("");
+        };
+
+        // Process first row (headers)
+        if (rows[0] && rows[0].content) {
+          const headerCells = rows[0].content;
+          const headers = headerCells.map(getCellContent);
+          tableMarkdown += `| ${headers.join(" | ")} |\n`;
+          tableMarkdown += `| ${headers.map(() => "---").join(" | ")} |\n`;
+        }
+
+        // Process remaining rows (data)
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (row && row.content) {
+            const cells = row.content.map(getCellContent);
+            tableMarkdown += `| ${cells.join(" | ")} |\n`;
+          }
+        }
+
+        return tableMarkdown + "\n";
+
+      case "tableRow":
+      case "tableHeader":
+      case "tableCell":
+        // These are handled by the table case above
+        return content;
+
       default:
         return content;
     }
@@ -162,6 +446,9 @@ export function tiptapToMarkdown(
 
   // Clean up extra newlines
   markdown = markdown.replace(/\n{3,}/g, "\n\n").trim();
+
+  // Clean out any base64 data URLs or prompt text that shouldn't be in the content
+  markdown = cleanMarkdown(markdown);
 
   return markdown;
 }
@@ -181,6 +468,9 @@ export function markdownToTiptap(markdown: string): JSONContent {
     };
   }
 
+  // Clean the markdown first to remove any base64 data URLs
+  markdown = cleanMarkdown(markdown);
+
   const lines = markdown.split("\n");
   const content: JSONContent[] = [];
   let inCodeBlock = false;
@@ -189,6 +479,8 @@ export function markdownToTiptap(markdown: string): JSONContent {
   let inList = false;
   let listItems: JSONContent[] = [];
   let listType: "bulletList" | "orderedList" = "bulletList";
+  let inTable = false;
+  let tableRows: JSONContent[] = [];
 
   function flushCodeBlock() {
     if (inCodeBlock && codeBlockContent.length > 0) {
@@ -216,6 +508,17 @@ export function markdownToTiptap(markdown: string): JSONContent {
       });
       listItems = [];
       inList = false;
+    }
+  }
+
+  function flushTable() {
+    if (inTable && tableRows.length > 0) {
+      content.push({
+        type: "table",
+        content: tableRows,
+      });
+      tableRows = [];
+      inTable = false;
     }
   }
 
@@ -289,7 +592,11 @@ export function markdownToTiptap(markdown: string): JSONContent {
         const text = match[2] || match[1];
         const isOrdered = !!orderedMatch;
 
-        if (!inList || (isOrdered && listType === "bulletList") || (!isOrdered && listType === "orderedList")) {
+        if (
+          !inList ||
+          (isOrdered && listType === "bulletList") ||
+          (!isOrdered && listType === "orderedList")
+        ) {
           flushList();
           inList = true;
           listType = isOrdered ? "orderedList" : "bulletList";
@@ -312,6 +619,7 @@ export function markdownToTiptap(markdown: string): JSONContent {
     const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (imageMatch) {
       flushList();
+      flushTable();
       content.push({
         type: "image",
         attrs: {
@@ -320,6 +628,91 @@ export function markdownToTiptap(markdown: string): JSONContent {
         },
       });
       continue;
+    }
+
+    // Tables - markdown format: | Header 1 | Header 2 |
+    const tableRowMatch = trimmed.match(/^\|(.+)\|$/);
+    if (tableRowMatch) {
+      flushList();
+
+      // Check if this is a separator row (| --- | --- |)
+      const isSeparator = trimmed.match(/^\|[\s\-:|]+\|$/);
+
+      if (isSeparator) {
+        // Skip separator rows, they just define the table structure
+        inTable = true;
+        continue;
+      }
+
+      // Parse table cells
+      const cellsText = tableRowMatch[1].split("|").map((cell) => cell.trim());
+
+      // Determine if this is a header row (first row of the table)
+      const isHeaderRow = !inTable || tableRows.length === 0;
+      const cellType = isHeaderRow ? "tableHeader" : "tableCell";
+
+      const cells: JSONContent[] = cellsText.map((cellText) => ({
+        type: cellType,
+        attrs: {},
+        content: [
+          {
+            type: "paragraph",
+            content: cellText ? parseInlineText(cellText) : [],
+          },
+        ],
+      }));
+
+      tableRows.push({
+        type: "tableRow",
+        content: cells,
+      });
+
+      inTable = true;
+      continue;
+    } else if (inTable) {
+      // No longer in a table, flush it
+      flushTable();
+    }
+
+    // Skip lines that are pure base64 data URLs (they shouldn't be in markdown as text)
+    // These might have been accidentally saved as text content
+    if (trimmed.match(/^data:image\/[^;]+;base64,[A-Za-z0-9+/=]+$/)) {
+      continue;
+    }
+
+    // Skip lines that start with base64 data URLs (even if wrapped)
+    if (trimmed.startsWith("data:image/") && trimmed.includes(";base64,")) {
+      // Check if it's a very long line (likely base64 data)
+      if (trimmed.length > 100) {
+        continue;
+      }
+    }
+
+    // Skip lines that look like image generation prompts
+    const lowerTrimmed = trimmed.toLowerCase();
+    if (
+      trimmed.match(/^!\[Prompt:.*\]\(\)$/) || // ![Prompt:]() format
+      trimmed.match(/^\|+\s*Generate/i) || // ||Generate or |Generate patterns
+      trimmed.match(/^Aspect Ratio:/i) || // Aspect Ratio: line
+      (lowerTrimmed.includes("generate") &&
+        lowerTrimmed.includes("ai") &&
+        lowerTrimmed.includes("image")) ||
+      (lowerTrimmed.includes("generate") &&
+        lowerTrimmed.includes("art") &&
+        lowerTrimmed.includes("image")) ||
+      (trimmed.length > 100 &&
+        lowerTrimmed.includes("cover image") &&
+        lowerTrimmed.includes("aspect ratio") &&
+        lowerTrimmed.includes("eye-catching")) ||
+      (trimmed.length > 100 &&
+        lowerTrimmed.includes("image generation prompt") &&
+        lowerTrimmed.includes("dynamic and modern")) ||
+      (trimmed.length > 100 &&
+        lowerTrimmed.includes("text overlay") &&
+        lowerTrimmed.includes("gradient background") &&
+        lowerTrimmed.includes("16:9"))
+    ) {
+      continue; // Skip prompt lines
     }
 
     // Regular paragraph
@@ -331,7 +724,10 @@ export function markdownToTiptap(markdown: string): JSONContent {
       });
     } else if (!inList && !inCodeBlock) {
       // Empty line - add paragraph break if not in list/code
-      if (content.length > 0 && content[content.length - 1].type !== "paragraph") {
+      if (
+        content.length > 0 &&
+        content[content.length - 1].type !== "paragraph"
+      ) {
         content.push({
           type: "paragraph",
         });
@@ -341,6 +737,7 @@ export function markdownToTiptap(markdown: string): JSONContent {
 
   flushCodeBlock();
   flushList();
+  flushTable();
 
   // Ensure at least one paragraph
   if (content.length === 0) {

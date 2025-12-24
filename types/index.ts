@@ -37,6 +37,7 @@ export interface Topic {
 
 export interface TopicMetadata {
   angle?: string;
+  hook?: string;
   discoveredAt?: string;
   searchKeywords?: string[];
   similarTopics?: Array<{
@@ -44,6 +45,23 @@ export interface TopicMetadata {
     title: string;
     similarity: number;
   }>;
+  /**
+   * Topic category for diversity tracking.
+   * Used in discover mode to ensure mix of perspectives.
+   */
+  category?: "future-forward" | "evergreen" | "creative" | "practical" | "business";
+  /**
+   * Rationale for why this topic would make a good article.
+   * Only present in prompt mode.
+   */
+  rationale?: string;
+  /**
+   * Which mode generated this topic.
+   */
+  mode?: "discover" | "direct" | "prompt";
+  articleType?: ArticleType;
+  temporary?: boolean;
+  _topicData?: unknown;
 }
 
 export interface Source {
@@ -330,13 +348,24 @@ export interface GenerationConfig {
    * How the user wants to define the topic:
    * - discover: use industry/keywords to discover topics
    * - direct: user provides an explicit topic/product set
+   * - prompt: user provides detailed description, AI generates options with rationale
    */
-  topicMode?: "discover" | "direct";
+  topicMode?: "discover" | "direct" | "prompt";
   /**
    * Direct topic input (tutorial subject, affiliate product(s), personal premise, etc).
    * For affiliate comparisons, users can provide a comma-separated list of products.
    */
   topicQuery?: string;
+  /**
+   * Prompt mode input - user's detailed description of what they want to write about.
+   * AI generates 5-10 title options from this with explanations.
+   */
+  promptInput?: string;
+  /**
+   * Whether to use web search in prompt mode (default: false).
+   * When true, searches for sources to supplement AI generation.
+   */
+  useSearchInPrompt?: boolean;
   /**
    * Extra instructions/brief to guide the outline + writing agents.
    * For personal pieces, this should include the story/experience details.

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useArticleGeneration } from "@/hooks/use-article-generation";
 import { useStreamingWriter } from "@/hooks/use-streaming-writer";
 import type { ArticleType, GenerationConfig, Topic } from "@/types";
+import type { UserPreferences } from "@/hooks/use-user-preferences";
+import { INDUSTRIES } from "@/lib/onboarding-config";
 import { TopicsStage } from "./topics-stage";
 import { OutlineStage } from "./outline-stage";
 import { StreamingContentStage } from "./streaming-content-stage";
@@ -22,12 +24,14 @@ interface CreateArticleFlowProps {
   initialTopic?: Topic | null;
   onTopicProcessed?: () => void;
   onBackToTopicsFeed?: () => void;
+  userPreferences?: UserPreferences;
 }
 
 export function CreateArticleFlow({
   initialTopic,
   onTopicProcessed,
   onBackToTopicsFeed,
+  userPreferences,
 }: CreateArticleFlowProps = {}) {
   const router = useRouter();
   const {
@@ -238,6 +242,7 @@ export function CreateArticleFlow({
             cameFromFeed.current = false;
             startResearch(config);
           }}
+          userPreferences={userPreferences}
         />
       )}
 
@@ -349,6 +354,7 @@ interface ConfigStageProps {
   config: GenerationConfig;
   onChange: (config: GenerationConfig) => void;
   onNext: () => void;
+  userPreferences?: UserPreferences;
 }
 
 // Map article types to optimal target lengths based on content requirements
@@ -366,7 +372,185 @@ function getOptimalTargetLength(articleType: ArticleType): "short" | "medium" | 
   return lengthMap[articleType] || "medium";
 }
 
-function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
+const articleTypes = [
+  { id: "blog", label: "Blog Post", desc: "Conversational, engaging" },
+  {
+    id: "technical",
+    label: "Technical Article",
+    desc: "In-depth, code examples",
+  },
+  { id: "news", label: "News Analysis", desc: "Factual, timely" },
+  { id: "opinion", label: "Opinion Piece", desc: "Persuasive, clear stance" },
+  { id: "tutorial", label: "Tutorial", desc: "Step-by-step guide" },
+  {
+    id: "listicle",
+    label: "Listicle",
+    desc: "Numbered list format, e.g., '11 AI Tools Every Founder Should Know'",
+  },
+  {
+    id: "affiliate",
+    label: "Affiliate Piece",
+    desc: "Comparison and recommendation articles",
+  },
+  {
+    id: "personal",
+    label: "Personal Piece",
+    desc: "First-person experience/journey with concrete takeaways",
+  },
+];
+
+interface ArticleTypeSelectorProps {
+  config: GenerationConfig;
+  onChange: (config: GenerationConfig) => void;
+  topicMode: "discover" | "direct" | "prompt";
+  setTopicMode: (mode: "discover" | "direct" | "prompt") => void;
+  activeTab: "prompt" | "keywords";
+  directTopicQuery: string;
+  customInstructions: string;
+}
+
+function ArticleTypeSelector({
+  config,
+  onChange,
+  topicMode,
+  setTopicMode,
+  activeTab,
+  directTopicQuery,
+  customInstructions,
+}: ArticleTypeSelectorProps) {
+  const supportsDirectTopic = (type: ArticleType) =>
+    type === "tutorial" || type === "affiliate" || type === "personal";
+  const forceDirectOnly = (type: ArticleType) => type === "personal";
+
+  return (
+    <div>
+      <h2 className="text-lg font-semibold mb-4">Article Type</h2>
+      <p className="text-sm text-slate-600 dark:text-zinc-400 mb-4">
+        Article length is automatically optimized based on the selected type
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {articleTypes.map((type) => {
+          const optimalLength = getOptimalTargetLength(type.id as ArticleType);
+          const lengthLabels = {
+            short: "~600-900 words",
+            medium: "~1,500 words",
+            long: "~1,800-2,500+ words",
+          };
+          return (
+            <button
+              key={type.id}
+              onClick={() => {
+                const optimalLength = getOptimalTargetLength(
+                  type.id as ArticleType
+                );
+                const nextArticleType = type.id as ArticleType;
+                const nextMode = forceDirectOnly(nextArticleType)
+                  ? "direct"
+                  : topicMode;
+                setTopicMode(nextMode);
+                onChange({
+                  ...config,
+                  articleType: nextArticleType,
+                  targetLength: optimalLength,
+                  topicMode: supportsDirectTopic(nextArticleType)
+                    ? nextMode
+                    : activeTab === "prompt"
+                    ? "prompt"
+                    : "discover",
+                  topicQuery:
+                    supportsDirectTopic(nextArticleType) &&
+                    nextMode === "direct"
+                      ? directTopicQuery.trim()
+                        ? directTopicQuery
+                        : undefined
+                      : undefined,
+                  customInstructions: customInstructions.trim()
+                    ? customInstructions
+                    : undefined,
+                });
+              }}
+              className={`p-4 rounded-xl border text-left transition-all ${
+                config.articleType === type.id
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 shadow-sm"
+                  : "border-slate-200 dark:border-zinc-800 bg-white dark:bg-transparent hover:border-slate-300 dark:hover:border-zinc-600 hover:shadow-sm"
+              }`}
+            >
+              <span className="font-medium block">{type.label}</span>
+              <span className="text-sm text-slate-600 dark:text-zinc-400">
+                {type.desc}
+              </span>
+              <span className="text-xs text-slate-500 dark:text-zinc-500 mt-1 block">
+                {lengthLabels[optimalLength]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+interface WordCountSelectorProps {
+  config: GenerationConfig;
+  onChange: (config: GenerationConfig) => void;
+}
+
+function WordCountSelector({ config, onChange }: WordCountSelectorProps) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold mb-4">Word Count (Optional)</h2>
+      <p className="text-sm text-slate-600 dark:text-zinc-400 mb-4">
+        Specify a custom word count, or leave empty to use the optimal word
+        count for the selected article type.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => {
+            onChange({
+              ...config,
+              wordCount: undefined, // Clear custom word count to use optimal
+            });
+          }}
+          className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+            !config.wordCount
+              ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-slate-900 dark:text-white shadow-sm font-medium"
+              : "border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-600"
+          }`}
+        >
+          Optimal (Default)
+        </button>
+        {[250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2500, 3000].map(
+          (count) => (
+            <button
+              key={count}
+              onClick={() => {
+                onChange({
+                  ...config,
+                  wordCount: count,
+                });
+              }}
+              className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                config.wordCount === count
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-slate-900 dark:text-white shadow-sm font-medium"
+                  : "border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-600"
+              }`}
+            >
+              {count.toLocaleString()} words
+            </button>
+          )
+        )}
+      </div>
+      {config.wordCount && (
+        <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+          ✓ Custom word count: {config.wordCount.toLocaleString()} words will be
+          used instead of the optimal length.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ConfigStage({ config, onChange, onNext, userPreferences }: ConfigStageProps) {
   // Initialize search terms from config keywords if they exist
   const getInitialSearchTerms = () => {
     return config.keywords && config.keywords.length > 0
@@ -374,160 +558,222 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
       : "";
   };
 
+  // Tab state - default to "prompt" to feature it prominently
+  const initialTab =
+    config.topicMode === "prompt" && config.promptInput
+      ? "prompt"
+      : config.industry || config.keywords?.length
+      ? "keywords"
+      : "prompt";
+
+  const [activeTab, setActiveTab] = useState<"prompt" | "keywords">(initialTab);
+
   const [searchTerms, setSearchTerms] = useState(getInitialSearchTerms);
-  const [topicMode, setTopicMode] = useState<"discover" | "direct">(
-    config.topicMode || "discover"
+  const [topicMode, setTopicMode] = useState<"discover" | "direct" | "prompt">(
+    config.topicMode || (initialTab === "prompt" ? "prompt" : "discover")
   );
   const [directTopicQuery, setDirectTopicQuery] = useState(
     config.topicQuery || ""
   );
+  const [promptInput, setPromptInput] = useState(config.promptInput || "");
+  const [useSearchInPrompt, setUseSearchInPrompt] = useState(
+    config.useSearchInPrompt || false
+  );
   const [customInstructions, setCustomInstructions] = useState(
     config.customInstructions || ""
   );
-  // Track excluded keywords per industry (industryId -> Set of excluded keywords)
+  // Track excluded keywords per category (categoryId -> Set of excluded keywords)
   const [excludedKeywords, setExcludedKeywords] = useState<
     Record<string, Set<string>>
   >({});
-  // Track which industry card has expanded keywords view
-  const [expandedIndustry, setExpandedIndustry] = useState<string | null>(null);
+  // Track which category card has expanded keywords view
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
-  const industries = [
-    { id: "ai", label: "AI & Machine Learning", icon: "🤖" },
-    { id: "tech", label: "Technology", icon: "💻" },
-    { id: "health", label: "Health & Wellness", icon: "🏥" },
-    { id: "finance", label: "Finance & Fintech", icon: "💰" },
-    { id: "climate", label: "Climate & Sustainability", icon: "🌍" },
-    { id: "crypto", label: "Crypto & Web3", icon: "⛓️" },
-  ];
+  // Build personalized categories from user preferences or use defaults
+  const { categories, categoryKeywords } = useMemo(() => {
+    if (userPreferences && userPreferences.primaryIndustry) {
+      const industryConfig = INDUSTRIES[userPreferences.primaryIndustry];
+      if (industryConfig && industryConfig.subcategories) {
+        // Map subcategories to category format
+        const personalizedCategories = industryConfig.subcategories.map((sub) => ({
+          id: sub.id,
+          label: sub.name,
+          icon: "📌", // Default icon for subcategories
+        }));
 
-  // Industry keyword mappings (matches API route)
-  const industryKeywords: Record<string, string[]> = {
-    ai: [
-      "artificial intelligence",
-      "machine learning",
-      "deep learning",
-      "LLM",
-      "GPT",
-      "neural network",
-      "AI agents",
-      "generative AI",
-      "transformer models",
-      "computer vision",
-    ],
-    tech: [
-      "technology",
-      "software",
-      "startup",
-      "SaaS",
-      "cloud computing",
-      "cybersecurity",
-      "devops",
-      "programming",
-      "open source",
-      "tech industry",
-    ],
-    health: [
-      "healthcare",
-      "medical",
-      "wellness",
-      "biotech",
-      "digital health",
-      "telemedicine",
-      "mental health",
-      "pharmaceutical",
-      "clinical trials",
-      "health tech",
-    ],
-    finance: [
-      "fintech",
-      "banking",
-      "investment",
-      "cryptocurrency",
-      "stock market",
-      "venture capital",
-      "financial services",
-      "payments",
-      "insurance tech",
-      "trading",
-    ],
-    climate: [
-      "climate change",
-      "sustainability",
-      "renewable energy",
-      "clean tech",
-      "carbon footprint",
-      "ESG",
-      "green technology",
-      "electric vehicles",
-      "solar energy",
-      "climate tech",
-    ],
-    crypto: [
-      "cryptocurrency",
-      "blockchain",
-      "web3",
-      "DeFi",
-      "NFT",
-      "Bitcoin",
-      "Ethereum",
-      "smart contracts",
-      "decentralized",
-      "crypto regulation",
-    ],
-  };
+        // Map subcategory keywords
+        const personalizedKeywords: Record<string, string[]> = {};
+        industryConfig.subcategories.forEach((sub) => {
+          personalizedKeywords[sub.id] = sub.keywords;
+        });
 
-  const articleTypes = [
-    { id: "blog", label: "Blog Post", desc: "Conversational, engaging" },
-    {
-      id: "technical",
-      label: "Technical Article",
-      desc: "In-depth, code examples",
-    },
-    { id: "news", label: "News Analysis", desc: "Factual, timely" },
-    { id: "opinion", label: "Opinion Piece", desc: "Persuasive, clear stance" },
-    { id: "tutorial", label: "Tutorial", desc: "Step-by-step guide" },
-    {
-      id: "listicle",
-      label: "Listicle",
-      desc: "Numbered list format, e.g., '11 AI Tools Every Founder Should Know'",
-    },
-    {
-      id: "affiliate",
-      label: "Affiliate Piece",
-      desc: "Comparison and recommendation articles",
-    },
-    {
-      id: "personal",
-      label: "Personal Piece",
-      desc: "First-person experience/journey with concrete takeaways",
-    },
-  ];
+        return {
+          categories: personalizedCategories,
+          categoryKeywords: personalizedKeywords,
+        };
+      }
+    }
+
+    // Fallback to default hardcoded industries
+    const defaultCategories = [
+      { id: "ai", label: "AI & Machine Learning", icon: "🤖" },
+      { id: "tech", label: "Technology", icon: "💻" },
+      { id: "health", label: "Health & Wellness", icon: "🏥" },
+      { id: "finance", label: "Finance & Fintech", icon: "💰" },
+      { id: "climate", label: "Climate & Sustainability", icon: "🌍" },
+      { id: "crypto", label: "Crypto & Web3", icon: "⛓️" },
+    ];
+
+    const defaultKeywords: Record<string, string[]> = {
+      ai: [
+        "artificial intelligence",
+        "machine learning",
+        "deep learning",
+        "LLM",
+        "GPT",
+        "neural network",
+        "AI agents",
+        "generative AI",
+        "transformer models",
+        "computer vision",
+      ],
+      tech: [
+        "technology",
+        "software",
+        "startup",
+        "SaaS",
+        "cloud computing",
+        "cybersecurity",
+        "devops",
+        "programming",
+        "open source",
+        "tech industry",
+      ],
+      health: [
+        "healthcare",
+        "medical",
+        "wellness",
+        "biotech",
+        "digital health",
+        "telemedicine",
+        "mental health",
+        "pharmaceutical",
+        "clinical trials",
+        "health tech",
+      ],
+      finance: [
+        "fintech",
+        "banking",
+        "investment",
+        "cryptocurrency",
+        "stock market",
+        "venture capital",
+        "financial services",
+        "payments",
+        "insurance tech",
+        "trading",
+      ],
+      climate: [
+        "climate change",
+        "sustainability",
+        "renewable energy",
+        "clean tech",
+        "carbon footprint",
+        "ESG",
+        "green technology",
+        "electric vehicles",
+        "solar energy",
+        "climate tech",
+      ],
+      crypto: [
+        "cryptocurrency",
+        "blockchain",
+        "web3",
+        "DeFi",
+        "NFT",
+        "Bitcoin",
+        "Ethereum",
+        "smart contracts",
+        "decentralized",
+        "crypto regulation",
+      ],
+    };
+
+    return {
+      categories: defaultCategories,
+      categoryKeywords: defaultKeywords,
+    };
+  }, [userPreferences]);
 
   const supportsDirectTopic = (type: ArticleType) =>
     type === "tutorial" || type === "affiliate" || type === "personal";
   const forceDirectOnly = (type: ArticleType) => type === "personal";
 
-  const handleTopicModeChange = (mode: "discover" | "direct") => {
+  const handleTopicModeChange = (mode: "discover" | "direct" | "prompt") => {
     setTopicMode(mode);
+
     if (mode === "discover") {
+      setActiveTab("keywords");
       setDirectTopicQuery("");
+      setPromptInput("");
       onChange({
         ...config,
         topicMode: "discover",
         topicQuery: undefined,
+        promptInput: undefined,
+        useSearchInPrompt: false,
         customInstructions: customInstructions.trim()
           ? customInstructions
           : undefined,
       });
-      return;
+    } else if (mode === "direct") {
+      setPromptInput("");
+      onChange({
+        ...config,
+        topicMode: "direct",
+        topicQuery: directTopicQuery.trim() ? directTopicQuery : undefined,
+        promptInput: undefined,
+        useSearchInPrompt: false,
+        customInstructions: customInstructions.trim()
+          ? customInstructions
+          : undefined,
+      });
+    } else {
+      // prompt mode
+      setActiveTab("prompt");
+      setDirectTopicQuery("");
+      onChange({
+        ...config,
+        topicMode: "prompt",
+        topicQuery: undefined,
+        promptInput: promptInput.trim() ? promptInput : undefined,
+        useSearchInPrompt: useSearchInPrompt,
+        customInstructions: customInstructions.trim()
+          ? customInstructions
+          : undefined,
+      });
     }
+  };
+
+  const handlePromptInputChange = (value: string) => {
+    setPromptInput(value);
+    setTopicMode("prompt");
+    setActiveTab("prompt"); // Ensure we're on the prompt tab
     onChange({
       ...config,
-      topicMode: "direct",
-      topicQuery: directTopicQuery.trim() ? directTopicQuery : undefined,
-      customInstructions: customInstructions.trim()
-        ? customInstructions
-        : undefined,
+      topicMode: "prompt",
+      promptInput: value.trim() ? value : undefined,
+      useSearchInPrompt: useSearchInPrompt,
+    });
+  };
+
+  const handleUseSearchInPromptChange = (checked: boolean) => {
+    setUseSearchInPrompt(checked);
+    onChange({
+      ...config,
+      topicMode: "prompt",
+      promptInput: promptInput.trim() ? promptInput : undefined,
+      useSearchInPrompt: checked,
     });
   };
 
@@ -556,6 +802,7 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
 
   const handleSearchChange = (value: string) => {
     setSearchTerms(value);
+    setActiveTab("keywords"); // Ensure we're on the keywords tab
     // Parse comma-separated keywords
     const keywords = value
       .split(",")
@@ -573,6 +820,7 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
   };
 
   const handleIndustrySelect = (industryId: string) => {
+    setActiveTab("keywords"); // Ensure we're on the keywords tab
     const isCurrentlySelected = config.industry === industryId;
     const hasExcludedForThisIndustry = excludedKeywords[industryId]?.size > 0;
 
@@ -592,7 +840,7 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
         delete newExcluded[industryId];
         return newExcluded;
       });
-      setExpandedIndustry(null);
+      setExpandedCategory(null);
     } else {
       // Select new industry
       onChange({
@@ -607,7 +855,7 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
       if (config.industry && config.industry !== industryId) {
         setExcludedKeywords({});
       }
-      setExpandedIndustry(null);
+      setExpandedCategory(null);
     }
   };
 
@@ -639,9 +887,9 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
       return newExcluded;
     });
 
-    // Get all keywords for this industry, filter out excluded ones
-    const allKeywords = industryKeywords[industryId] || [];
-    const filteredKeywords = allKeywords.filter((k) => !updatedExcluded.has(k));
+    // Get all keywords for this category, filter out excluded ones
+    const allKeywords = categoryKeywords[industryId] || [];
+    const filteredKeywords = allKeywords.filter((k: string) => !updatedExcluded.has(k));
 
     if (updatedExcluded.size === 0) {
       // No exclusions, go back to industry mode
@@ -668,7 +916,7 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
     e: React.MouseEvent
   ) => {
     e.stopPropagation(); // Prevent triggering the button click
-    setExpandedIndustry((prev) => (prev === industryId ? null : industryId));
+    setExpandedCategory((prev: string | null) => (prev === industryId ? null : industryId));
   };
 
   const hasSelection =
@@ -676,248 +924,276 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
     (config.keywords && config.keywords.length > 0) ||
     (config.topicMode === "direct" &&
       ((config.articleType === "personal" && !!customInstructions.trim()) ||
-        !!directTopicQuery.trim()));
+        !!directTopicQuery.trim())) ||
+    (config.topicMode === "prompt" &&
+      !!promptInput.trim() &&
+      promptInput.trim().length >= 10);
 
   return (
     <div className="space-y-8">
-      {/* Search/Discover Mode (default) */}
-      {(!supportsDirectTopic(config.articleType) ||
-        (!forceDirectOnly(config.articleType) && topicMode === "discover")) && (
-        <div>
-          <h2 className="text-lg font-semibold mb-4">Search Topics</h2>
-          <div className="mb-4">
-            <input
-              type="text"
-              value={searchTerms}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="Enter keywords (comma-separated), e.g., AI, machine learning, neural networks"
-              className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            />
-            <p className="mt-2 text-sm text-slate-600 dark:text-zinc-400">
-              Enter specific keywords to search for topics, or select an
-              industry category below
+      {/* Tabs */}
+      <div className="border-b border-slate-200 dark:border-zinc-800">
+        <div className="flex gap-1">
+          <button
+            onClick={() => {
+              setActiveTab("prompt");
+              // Only change topicMode if not in direct mode (direct mode is independent of tabs)
+              if (activeTab !== "prompt" && topicMode !== "direct") {
+                setTopicMode("prompt");
+                onChange({
+                  ...config,
+                  topicMode: "prompt",
+                  promptInput: promptInput.trim() ? promptInput : undefined,
+                  useSearchInPrompt: useSearchInPrompt,
+                });
+              }
+            }}
+            className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
+              activeTab === "prompt"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200"
+            }`}
+          >
+            ✨ Prompt
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("keywords");
+              // Only change topicMode if not in direct mode (direct mode is independent of tabs)
+              if (activeTab !== "keywords" && topicMode !== "direct") {
+                setTopicMode("discover");
+                onChange({
+                  ...config,
+                  topicMode: "discover",
+                  promptInput: undefined,
+                  useSearchInPrompt: false,
+                });
+              }
+            }}
+            className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
+              activeTab === "keywords"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200"
+            }`}
+          >
+            🔍 Keywords & Categories
+          </button>
+        </div>
+      </div>
+
+      {/* Prompt Tab Content */}
+      {activeTab === "prompt" && (
+        <div className="space-y-8">
+          {/* Prominent Prompt Input */}
+          <div>
+            <h2 className="text-xl font-semibold mb-3 text-slate-900 dark:text-white">
+              What do you want to write about?
+            </h2>
+            <p className="text-sm text-slate-600 dark:text-zinc-400 mb-4">
+              Describe your article idea in your own words. Be as detailed as
+              you want—the AI will generate topic options based on your
+              description.
+            </p>
+            <div className="relative">
+              <textarea
+                value={promptInput}
+                onChange={(e) => handlePromptInputChange(e.target.value)}
+                placeholder="Example: I want to write about how small teams can implement AI without breaking the bank, focusing on practical tools and real ROI examples. I'd like to cover both free and paid options, with case studies from startups."
+                className="w-full px-5 py-4 bg-white dark:bg-zinc-900 border-2 border-slate-300 dark:border-zinc-700 rounded-xl text-base text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                rows={6}
+              />
+              <div className="absolute bottom-4 right-4 text-xs text-slate-400 dark:text-zinc-500">
+                {promptInput.length} characters
+              </div>
+            </div>
+
+            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded-lg">
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="useSearchInPrompt"
+                  checked={useSearchInPrompt}
+                  onChange={(e) =>
+                    handleUseSearchInPromptChange(e.target.checked)
+                  }
+                  className="mt-0.5 rounded border-slate-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500"
+                />
+                <div>
+                  <label
+                    htmlFor="useSearchInPrompt"
+                    className="text-sm font-medium text-slate-900 dark:text-white cursor-pointer block"
+                  >
+                    Include web search for sources
+                  </label>
+                  <p className="text-xs text-slate-600 dark:text-zinc-400 mt-1">
+                    The AI will research current trends and find supporting
+                    sources. This adds research time but provides more
+                    up-to-date information.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-3 text-xs text-blue-600 dark:text-blue-400">
+              💡 The AI will generate 5-10 title options with explanations of
+              why each would make a strong article.
             </p>
           </div>
 
-          <div className="mt-6">
-            <h3 className="text-md font-medium mb-3 text-slate-700 dark:text-zinc-300">
-              Or Select Industry Category
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {industries.map((ind) => {
-                const isSelected = config.industry === ind.id;
-                const allKeywords = industryKeywords[ind.id] || [];
-                const excluded = excludedKeywords[ind.id] || new Set();
-                const hasExcluded = excluded.size > 0;
-                // Show as selected if industry is selected OR if it has excluded keywords (user modified this industry)
-                const showAsSelected = isSelected || hasExcluded;
-                const isExpanded = expandedIndustry === ind.id;
-
-                // Show all keywords if expanded, otherwise show first 6 visible ones
-                const keywordsToShow = isExpanded
-                  ? allKeywords
-                  : allKeywords.slice(0, 6);
-                const remainingCount = isExpanded
-                  ? 0
-                  : Math.max(0, allKeywords.length - 6);
-
-                return (
-                  <button
-                    key={ind.id}
-                    onClick={() => handleIndustrySelect(ind.id)}
-                    className={`p-4 rounded-xl border text-left transition-all w-full ${
-                      showAsSelected
-                        ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 shadow-sm"
-                        : "border-slate-200 dark:border-zinc-800 bg-white dark:bg-transparent hover:border-slate-300 dark:hover:border-zinc-600 hover:shadow-sm"
-                    }`}
-                  >
-                    <span className="text-2xl mb-2 block">{ind.icon}</span>
-                    <span className="font-medium block mb-2">{ind.label}</span>
-                    {showAsSelected && allKeywords.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-zinc-700/50">
-                        <p className="text-xs text-slate-500 dark:text-zinc-400 mb-2 font-medium">
-                          Keywords used:
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {keywordsToShow.map((keyword) => {
-                            const isExcluded = excluded.has(keyword);
-                            return (
-                              <span
-                                key={keyword}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md border ${
-                                  isExcluded
-                                    ? "bg-slate-100 dark:bg-zinc-900/40 text-slate-400 dark:text-zinc-500 border-slate-200 dark:border-zinc-700/30 line-through"
-                                    : "bg-slate-100 dark:bg-zinc-800/60 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700/50"
-                                }`}
-                              >
-                                <span>{keyword}</span>
-                                <button
-                                  onClick={(e) =>
-                                    handleExcludeKeyword(ind.id, keyword, e)
-                                  }
-                                  className="ml-0.5 hover:text-red-400 transition-colors"
-                                  aria-label={`Remove ${keyword}`}
-                                >
-                                  <svg
-                                    className="w-3 h-3"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M6 18L18 6M6 6l12 12"
-                                    />
-                                  </svg>
-                                </button>
-                              </span>
-                            );
-                          })}
-                          {!isExpanded && remainingCount > 0 && (
-                            <button
-                              onClick={(e) =>
-                                handleToggleExpandKeywords(ind.id, e)
-                              }
-                              className="inline-block px-2 py-0.5 text-xs text-blue-400 hover:text-blue-300 italic underline transition-colors"
-                            >
-                              +{remainingCount} more
-                            </button>
-                          )}
-                          {isExpanded && allKeywords.length > 6 && (
-                            <button
-                              onClick={(e) =>
-                                handleToggleExpandKeywords(ind.id, e)
-                              }
-                              className="inline-block px-2 py-0.5 text-xs text-blue-400 hover:text-blue-300 italic underline transition-colors"
-                            >
-                              Show less
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <ArticleTypeSelector
+            config={config}
+            onChange={onChange}
+            topicMode={topicMode}
+            setTopicMode={setTopicMode}
+            activeTab={activeTab}
+            directTopicQuery={directTopicQuery}
+            customInstructions={customInstructions}
+          />
+          <WordCountSelector config={config} onChange={onChange} />
         </div>
       )}
 
-      <div>
-        <h2 className="text-lg font-semibold mb-4">Article Type</h2>
-        <p className="text-sm text-slate-600 dark:text-zinc-400 mb-4">
-          Article length is automatically optimized based on the selected type
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {articleTypes.map((type) => {
-            const optimalLength = getOptimalTargetLength(
-              type.id as ArticleType
-            );
-            const lengthLabels = {
-              short: "~600-900 words",
-              medium: "~1,500 words",
-              long: "~1,800-2,500+ words",
-            };
-            return (
-              <button
-                key={type.id}
-                onClick={() => {
-                  const optimalLength = getOptimalTargetLength(
-                    type.id as ArticleType
+      {/* Keywords & Categories Tab Content */}
+      {activeTab === "keywords" && (
+        <div className="space-y-8">
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Search Topics</h2>
+            <div className="mb-4">
+              <input
+                type="text"
+                value={searchTerms}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Enter keywords (comma-separated), e.g., AI, machine learning, neural networks"
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+              <p className="mt-2 text-sm text-slate-600 dark:text-zinc-400">
+                Enter specific keywords to search for topics, or select an
+                industry category below
+              </p>
+            </div>
+
+            <div className="mt-6">
+              <h3 className="text-md font-medium mb-3 text-slate-700 dark:text-zinc-300">
+                Or Select Industry Category
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {categories.map((ind) => {
+                  const isSelected = config.industry === ind.id;
+                  const allKeywords = categoryKeywords[ind.id] || [];
+                  const excluded = excludedKeywords[ind.id] || new Set();
+                  const hasExcluded = excluded.size > 0;
+                  // Show as selected if category is selected OR if it has excluded keywords (user modified this category)
+                  const showAsSelected = isSelected || hasExcluded;
+                  const isExpanded = expandedCategory === ind.id;
+
+                  // Show all keywords if expanded, otherwise show first 6 visible ones
+                  const keywordsToShow = isExpanded
+                    ? allKeywords
+                    : allKeywords.slice(0, 6);
+                  const remainingCount = isExpanded
+                    ? 0
+                    : Math.max(0, allKeywords.length - 6);
+
+                  return (
+                    <button
+                      key={ind.id}
+                      onClick={() => handleIndustrySelect(ind.id)}
+                      className={`p-4 rounded-xl border text-left transition-all w-full ${
+                        showAsSelected
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 shadow-sm"
+                          : "border-slate-200 dark:border-zinc-800 bg-white dark:bg-transparent hover:border-slate-300 dark:hover:border-zinc-600 hover:shadow-sm"
+                      }`}
+                    >
+                      <span className="text-2xl mb-2 block">{ind.icon}</span>
+                      <span className="font-medium block mb-2">
+                        {ind.label}
+                      </span>
+                      {showAsSelected && allKeywords.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-zinc-700/50">
+                          <p className="text-xs text-slate-500 dark:text-zinc-400 mb-2 font-medium">
+                            Keywords used:
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {keywordsToShow.map((keyword: string) => {
+                              const isExcluded = excluded.has(keyword);
+                              return (
+                                <span
+                                  key={keyword}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md border ${
+                                    isExcluded
+                                      ? "bg-slate-100 dark:bg-zinc-900/40 text-slate-400 dark:text-zinc-500 border-slate-200 dark:border-zinc-700/30 line-through"
+                                      : "bg-slate-100 dark:bg-zinc-800/60 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700/50"
+                                  }`}
+                                >
+                                  <span>{keyword}</span>
+                                  <button
+                                    onClick={(e) =>
+                                      handleExcludeKeyword(ind.id, keyword, e)
+                                    }
+                                    className="ml-0.5 hover:text-red-400 transition-colors"
+                                    aria-label={`Remove ${keyword}`}
+                                  >
+                                    <svg
+                                      className="w-3 h-3"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M6 18L18 6M6 6l12 12"
+                                      />
+                                    </svg>
+                                  </button>
+                                </span>
+                              );
+                            })}
+                            {!isExpanded && remainingCount > 0 && (
+                              <button
+                                onClick={(e) =>
+                                  handleToggleExpandKeywords(ind.id, e)
+                                }
+                                className="inline-block px-2 py-0.5 text-xs text-blue-400 hover:text-blue-300 italic underline transition-colors"
+                              >
+                                +{remainingCount} more
+                              </button>
+                            )}
+                            {isExpanded && allKeywords.length > 6 && (
+                              <button
+                                onClick={(e) =>
+                                  handleToggleExpandKeywords(ind.id, e)
+                                }
+                                className="inline-block px-2 py-0.5 text-xs text-blue-400 hover:text-blue-300 italic underline transition-colors"
+                              >
+                                Show less
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </button>
                   );
-                  const nextArticleType = type.id as ArticleType;
-                  const nextMode = forceDirectOnly(nextArticleType)
-                    ? "direct"
-                    : topicMode;
-                  setTopicMode(nextMode);
-                  onChange({
-                    ...config,
-                    articleType: nextArticleType,
-                    targetLength: optimalLength,
-                    topicMode: supportsDirectTopic(nextArticleType)
-                      ? nextMode
-                      : "discover",
-                    topicQuery:
-                      supportsDirectTopic(nextArticleType) &&
-                      nextMode === "direct"
-                        ? directTopicQuery.trim()
-                          ? directTopicQuery
-                          : undefined
-                        : undefined,
-                    customInstructions: customInstructions.trim()
-                      ? customInstructions
-                      : undefined,
-                  });
-                }}
-                className={`p-4 rounded-xl border text-left transition-all ${
-                  config.articleType === type.id
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 shadow-sm"
-                    : "border-slate-200 dark:border-zinc-800 bg-white dark:bg-transparent hover:border-slate-300 dark:hover:border-zinc-600 hover:shadow-sm"
-                }`}
-              >
-                <span className="font-medium block">{type.label}</span>
-                <span className="text-sm text-slate-600 dark:text-zinc-400">{type.desc}</span>
-                <span className="text-xs text-slate-500 dark:text-zinc-500 mt-1 block">
-                  {lengthLabels[optimalLength]}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+                })}
+              </div>
+            </div>
+          </div>
 
-      {/* Optional Word Count Selector */}
-      <div>
-        <h2 className="text-lg font-semibold mb-4">Word Count (Optional)</h2>
-        <p className="text-sm text-slate-600 dark:text-zinc-400 mb-4">
-          Specify a custom word count, or leave empty to use the optimal word count for the selected article type.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => {
-              onChange({
-                ...config,
-                wordCount: undefined, // Clear custom word count to use optimal
-              });
-            }}
-            className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
-              !config.wordCount
-                ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-slate-900 dark:text-white shadow-sm font-medium"
-                : "border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-600"
-            }`}
-          >
-            Optimal (Default)
-          </button>
-          {[250, 500, 750, 1000, 1250, 1500, 1750, 2000, 2500, 3000].map((count) => (
-            <button
-              key={count}
-              onClick={() => {
-                onChange({
-                  ...config,
-                  wordCount: count,
-                });
-              }}
-              className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
-                config.wordCount === count
-                  ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-slate-900 dark:text-white shadow-sm font-medium"
-                  : "border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-slate-600 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-600"
-              }`}
-            >
-              {count.toLocaleString()} words
-            </button>
-          ))}
+          <ArticleTypeSelector
+            config={config}
+            onChange={onChange}
+            topicMode={topicMode}
+            setTopicMode={setTopicMode}
+            activeTab={activeTab}
+            directTopicQuery={directTopicQuery}
+            customInstructions={customInstructions}
+          />
+          <WordCountSelector config={config} onChange={onChange} />
         </div>
-        {config.wordCount && (
-          <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
-            ✓ Custom word count: {config.wordCount.toLocaleString()} words will be used instead of the optimal length.
-          </p>
-        )}
-      </div>
+      )}
 
-      {/* Direct Mode Inputs for Tutorial/Affiliate/Personal */}
+      {/* Direct Mode Inputs for Tutorial/Affiliate/Personal - Show in both tabs if applicable */}
       {supportsDirectTopic(config.articleType) && (
         <div className="border border-slate-200 dark:border-zinc-800 rounded-xl p-4 bg-slate-50 dark:bg-zinc-900/30">
           <div className="flex items-start justify-between gap-4">
@@ -939,7 +1215,10 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
             <div className="flex gap-2 mt-4">
               <button
                 type="button"
-                onClick={() => handleTopicModeChange("discover")}
+                onClick={() => {
+                  handleTopicModeChange("discover");
+                  setActiveTab("keywords");
+                }}
                 className={`px-3 py-2 rounded-lg text-sm border transition-colors ${
                   topicMode === "discover"
                     ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-slate-900 dark:text-white shadow-sm"
@@ -1022,7 +1301,7 @@ function ConfigStage({ config, onChange, onNext }: ConfigStageProps) {
       <button
         onClick={() => onNext()}
         disabled={!hasSelection}
-        className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         🔍 Find Topics →
       </button>

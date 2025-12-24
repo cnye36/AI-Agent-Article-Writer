@@ -66,14 +66,15 @@ const outlineAgentPrompt = `You are an expert content strategist and outline arc
   For each section, suggest opportunities to link to related articles using natural anchor text.
   
   Create an outline that:
-  1. Opens with a compelling hook {hookNote}
+  1. Opens with a compelling hook {hookNote} (50-100 words max)
   2. Flows logically from section to section (or numbered items for listicles)
   3. Includes specific talking points (not vague)
   4. Suggests internal links where relevant
-  5. Ends with a strong conclusion and CTA
+  5. Ends with a strong conclusion (summary: 80-120 words, CTA: 20-40 words)
   6. Includes SEO keywords
   7. **STRICTLY follows the article type format** - especially for listicles (numbered sections)
-  
+  8. **WORD COUNT BUDGETING**: Sections will be allocated ~80% of total word budget. Hook + conclusion use remaining ~20%.
+
   **IMPORTANT**: Do not use any em dashes in your outline.`;
 
 export function createOutlineAgent() {

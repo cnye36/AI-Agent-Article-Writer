@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
       articleId,
       isCover,
       articleTitle,
-      model = "gpt-image-1-mini",
-      quality = "high",
+      model = "gpt-image-1.5",
+      quality = "medium",
     } = await req.json();
 
     console.log(

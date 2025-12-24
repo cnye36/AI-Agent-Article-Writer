@@ -87,44 +87,44 @@ const LENGTH_CONFIG: Record<
   >
 > = {
   blog: {
-    short: { min: 1200, target: 1500, max: 1800 }, // Default/Standard: 1,500 words
-    medium: { min: 1200, target: 1500, max: 1800 },
-    long: { min: 2000, target: 2500, max: 3000 },
+    short: { min: 800, target: 1000, max: 1200 }, // Reduced and differentiated from medium
+    medium: { min: 1000, target: 1300, max: 1600 }, // Reduced by ~15%
+    long: { min: 1600, target: 2000, max: 2400 }, // Reduced by ~20%
   },
   technical: {
-    short: { min: 2000, target: 2500, max: 3000 }, // Deep Dive/Guide: 2,500+ words
-    medium: { min: 2000, target: 2500, max: 3000 },
-    long: { min: 2000, target: 2500, max: 3500 },
+    short: { min: 1600, target: 2000, max: 2400 }, // Reduced and differentiated
+    medium: { min: 2000, target: 2500, max: 3000 }, // Keep as differentiated tier
+    long: { min: 2500, target: 3000, max: 3500 }, // Slightly adjusted for proper progression
   },
   news: {
-    short: { min: 500, target: 600, max: 800 }, // News/Update: 600 words
-    medium: { min: 500, target: 600, max: 800 },
-    long: { min: 800, target: 1000, max: 1300 },
+    short: { min: 400, target: 500, max: 600 }, // Reduced and differentiated
+    medium: { min: 500, target: 700, max: 900 }, // Differentiated from short/long
+    long: { min: 700, target: 900, max: 1100 }, // Reduced slightly
   },
   opinion: {
-    short: { min: 700, target: 900, max: 1100 }, // Opinion/Editorial: 900 words
-    medium: { min: 700, target: 900, max: 1100 },
-    long: { min: 1200, target: 1500, max: 1800 },
+    short: { min: 600, target: 750, max: 900 }, // Reduced and differentiated
+    medium: { min: 800, target: 1000, max: 1200 }, // Differentiated tier
+    long: { min: 1000, target: 1300, max: 1600 }, // Reduced by ~15%
   },
   tutorial: {
-    short: { min: 2000, target: 2500, max: 3000 }, // Deep Dive/Guide: 2,500+ words
-    medium: { min: 2000, target: 2500, max: 3000 },
-    long: { min: 2000, target: 2500, max: 3500 },
+    short: { min: 1600, target: 2000, max: 2400 }, // Reduced and differentiated
+    medium: { min: 2000, target: 2500, max: 3000 }, // Keep as differentiated tier
+    long: { min: 2500, target: 3000, max: 3500 }, // Slightly adjusted for proper progression
   },
   listicle: {
-    short: { min: 1500, target: 1800, max: 2200 }, // Listicle: 1,800 words
-    medium: { min: 1500, target: 1800, max: 2200 },
-    long: { min: 2000, target: 2500, max: 3000 },
+    short: { min: 1200, target: 1500, max: 1800 }, // Reduced and differentiated
+    medium: { min: 1500, target: 1800, max: 2200 }, // Keep for differentiation
+    long: { min: 1800, target: 2200, max: 2600 }, // Reduced by ~15%
   },
   affiliate: {
-    short: { min: 1200, target: 1500, max: 1800 }, // Default/Standard: 1,500 words
-    medium: { min: 1200, target: 1500, max: 1800 },
-    long: { min: 2000, target: 2500, max: 3000 },
+    short: { min: 1000, target: 1200, max: 1500 }, // Reduced and differentiated
+    medium: { min: 1200, target: 1500, max: 1800 }, // Keep for differentiation
+    long: { min: 1600, target: 2000, max: 2400 }, // Reduced by ~20%
   },
   personal: {
-    short: { min: 900, target: 1200, max: 1500 },
-    medium: { min: 1200, target: 1500, max: 1800 },
-    long: { min: 2000, target: 2500, max: 3000 },
+    short: { min: 700, target: 900, max: 1100 }, // Reduced slightly
+    medium: { min: 1000, target: 1200, max: 1500 }, // Reduced slightly
+    long: { min: 1500, target: 1800, max: 2200 }, // Reduced by ~25%
   },
 };
 
@@ -1050,20 +1050,24 @@ function calculateSectionWordTarget(
   totalSections: number,
   totalWords: number
 ): number {
-  // Introduction and conclusion are typically shorter
+  // CRITICAL: Reserve budget for hook (~50-100 words) and conclusion (~100-150 words)
+  // Only allocate 80% of total words to sections, leaving 20% for hook + conclusion
+  const sectionsWordBudget = Math.floor(totalWords * 0.80);
+
+  // Introduction and conclusion sections are typically shorter
   const isIntro = sectionIndex === 0;
   const isConclusion = sectionIndex === totalSections - 1;
 
   if (isIntro) {
-    return Math.floor(totalWords * 0.1); // 10% for intro
+    return Math.floor(sectionsWordBudget * 0.12); // ~10% of section budget for intro
   }
   if (isConclusion) {
-    return Math.floor(totalWords * 0.1); // 10% for conclusion
+    return Math.floor(sectionsWordBudget * 0.12); // ~10% of section budget for conclusion
   }
 
-  // Remaining 80% distributed among body sections
+  // Remaining ~76% of section budget distributed among body sections
   const bodySections = totalSections - 2;
-  const bodyWords = totalWords * 0.8;
+  const bodyWords = sectionsWordBudget * 0.76;
   return Math.floor(bodyWords / bodySections);
 }
 

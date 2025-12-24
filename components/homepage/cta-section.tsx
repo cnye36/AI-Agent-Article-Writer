@@ -44,7 +44,7 @@ export function CTASection() {
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
             <Link
-              href="/auth/signup"
+              href="/#pricing"
               className="group inline-flex items-center justify-center gap-2 px-8 py-4 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold transition-all hover:scale-105 shadow-lg shadow-blue-500/25"
             >
               Start Your Free Trial
@@ -90,7 +90,7 @@ export function CTASection() {
                   d="M5 13l4 4L19 7"
                 />
               </svg>
-              No credit card required
+              Credit card required
             </span>
             <span className="flex items-center gap-2">
               <svg

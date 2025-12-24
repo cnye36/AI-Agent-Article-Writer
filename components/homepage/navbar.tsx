@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
-import { Menu, X, Sparkles } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const navLinks = [
@@ -21,11 +22,16 @@ export function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
+            <Image
+              src="/letaiwriteit-logo-256px.png"
+              alt="Let AI Write It!"
+              width={48}
+              height={48}
+              className="group-hover:scale-110 transition-transform"
+              priority
+            />
             <span className="text-xl font-bold text-zinc-900 dark:text-white">
-              Let AI Write It!
+              Let <span className="text-blue-500">AI</span> Write It!
             </span>
           </Link>
 
@@ -52,7 +58,7 @@ export function Navbar() {
               Sign In
             </Link>
             <Link
-              href="/auth/signup"
+              href="/#pricing"
               className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors"
             >
               Start Free Trial
@@ -103,7 +109,7 @@ export function Navbar() {
                 Sign In
               </Link>
               <Link
-                href="/auth/signup"
+                href="/#pricing"
                 className="block w-full px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-center font-semibold transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >

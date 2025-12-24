@@ -28,8 +28,8 @@ export function ArticleAssetsSection({
   onSetCoverImage,
   onDeleteImage,
   onImageClick,
-  imageModel = "gpt-image-1-mini",
-  imageQuality = "high",
+  imageModel = "gpt-image-1.5",
+  imageQuality = "medium",
   onImageModelChange,
   onImageQualityChange,
 }: ArticleAssetsSectionProps) {
